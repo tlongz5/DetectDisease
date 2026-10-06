@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">DetectPlantDiase</string>
+    <string name="app_title">🌿 Giám sát bệnh cây</string>
+    <string name="server_label">Server: %1$s</string>
+    <string name="history">Lịch sử phân tích</string>
+    <string name="empty_history">Chưa có dữ liệu.\nChờ ESP32-CAM gửi ảnh hoặc bấm \"Thử bằng ảnh\".</string>
+    <string name="test_with_photo">Thử bằng ảnh</string>
+    <string name="latest_image">Ảnh từ camera</string>
+    <string name="latest_meta">%1$s • %2$s\nĐộ tin cậy %3$s • AI %4$d ms</string>
+</resources>

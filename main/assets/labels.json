@@ -1,0 +1,48 @@
+{
+  "id2label": {
+    "0": "Bellpepper_fresh",
+    "1": "Bellpepper_intermediate_fresh",
+    "10": "Potato_intermediate_fresh",
+    "11": "Potato_rotten",
+    "12": "Tomato_fresh",
+    "13": "Tomato_intermediate_fresh",
+    "14": "Tomato_rotten",
+    "15": "ripe_apple",
+    "16": "ripe_banana",
+    "17": "ripe_mango",
+    "18": "ripe_oranges",
+    "19": "ripe_strawberry",
+    "2": "Bellpepper_rotten",
+    "20": "rotten_apple",
+    "21": "rotten_banana",
+    "22": "rotten_mango",
+    "23": "rotten_oranges",
+    "24": "rotten_strawberry",
+    "25": "unripe_apple",
+    "26": "unripe_banana",
+    "27": "unripe_mango",
+    "28": "unripe_oranges",
+    "29": "unripe_strawberry",
+    "3": "Carrot_fresh",
+    "4": "Carrot_intermediate_fresh",
+    "5": "Carrot_rotten",
+    "6": "Cucumber_fresh",
+    "7": "Cucumber_intermediate_fresh",
+    "8": "Cucumber_rotten",
+    "9": "Potato_fresh"
+  },
+  "input_size": [
+    224,
+    224
+  ],
+  "mean": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "std": [
+    0.5,
+    0.5,
+    0.5
+  ]
+}
