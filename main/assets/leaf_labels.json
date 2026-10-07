@@ -1,0 +1,122 @@
+{
+  "model_name": "EfficientNet-B0 Leaf Disease Classifier",
+  "img_size": 224,
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "classes_count": 15,
+  "labels": [
+    {
+      "index": 0,
+      "id": "Pepper_Bacterial_spot",
+      "code": "PBS",
+      "name_vi": "Ot - dom vi khuan",
+      "is_healthy": false
+    },
+    {
+      "index": 1,
+      "id": "Pepper_healthy",
+      "code": "---",
+      "name_vi": "Ot - khoe",
+      "is_healthy": true
+    },
+    {
+      "index": 2,
+      "id": "Potato_Early_blight",
+      "code": "PEB",
+      "name_vi": "Khoai tay - dom vong (benh som)",
+      "is_healthy": false
+    },
+    {
+      "index": 3,
+      "id": "Potato_Late_blight",
+      "code": "PLB",
+      "name_vi": "Khoai tay - moc suong (benh muon)",
+      "is_healthy": false
+    },
+    {
+      "index": 4,
+      "id": "Potato_healthy",
+      "code": "---",
+      "name_vi": "Khoai tay - khoe",
+      "is_healthy": true
+    },
+    {
+      "index": 5,
+      "id": "Tomato_Bacterial_spot",
+      "code": "TBS",
+      "name_vi": "Ca chua - dom vi khuan",
+      "is_healthy": false
+    },
+    {
+      "index": 6,
+      "id": "Tomato_Early_blight",
+      "code": "TEB",
+      "name_vi": "Ca chua - dom vong (benh som)",
+      "is_healthy": false
+    },
+    {
+      "index": 7,
+      "id": "Tomato_Late_blight",
+      "code": "TLB",
+      "name_vi": "Ca chua - moc suong (benh muon)",
+      "is_healthy": false
+    },
+    {
+      "index": 8,
+      "id": "Tomato_Leaf_Mold",
+      "code": "TLM",
+      "name_vi": "Ca chua - nam moc la",
+      "is_healthy": false
+    },
+    {
+      "index": 9,
+      "id": "Tomato_Mosaic",
+      "code": "TMV",
+      "name_vi": "Ca chua - virus kham la",
+      "is_healthy": false
+    },
+    {
+      "index": 10,
+      "id": "Tomato_Septoria",
+      "code": "TSL",
+      "name_vi": "Ca chua - dom la Septoria",
+      "is_healthy": false
+    },
+    {
+      "index": 11,
+      "id": "Tomato_Spider_mites",
+      "code": "TSM",
+      "name_vi": "Ca chua - nhen do",
+      "is_healthy": false
+    },
+    {
+      "index": 12,
+      "id": "Tomato_Target_Spot",
+      "code": "TTS",
+      "name_vi": "Ca chua - dom muc tieu",
+      "is_healthy": false
+    },
+    {
+      "index": 13,
+      "id": "Tomato_Yellow_Curl",
+      "code": "TYC",
+      "name_vi": "Ca chua - virus xoan vang la",
+      "is_healthy": false
+    },
+    {
+      "index": 14,
+      "id": "Tomato_healthy",
+      "code": "---",
+      "name_vi": "Ca chua - khoe",
+      "is_healthy": true
+    }
+  ]
+}
