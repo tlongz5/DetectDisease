@@ -95,8 +95,9 @@ class MainActivity : AppCompatActivity() {
         when {
             soil == null -> "Độ ẩm đất: ESP32-CAM chưa nhận được dữ liệu từ Nano"
             soil.getBoolean("fault") -> "Độ ẩm đất: cảm biến lỗi (Raw ${soil.getInt("raw")})"
+            // optBoolean: firmware ESP cu chua gui "fan" thi coi nhu quat tat
             else -> "Độ ẩm đất: ${soil.getInt("moisture")}% • Bơm: ${if (soil.getBoolean("pump")) "BẬT" else "TẮT"}" +
-                " (${soil.getLong("age_s")} giây trước)"
+                " • Quạt: ${if (soil.optBoolean("fan")) "BẬT" else "TẮT"} (${soil.getLong("age_s")} giây trước)"
         }
     } catch (e: Exception) {
         "Độ ẩm đất: không đọc được (${e.message})"
