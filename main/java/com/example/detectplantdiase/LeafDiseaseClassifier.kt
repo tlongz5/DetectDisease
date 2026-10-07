@@ -19,15 +19,16 @@ data class LeafResult(
     val level: String,             // "healthy" / "suspect" / "diseased" ("none" khi status khac "ok")
     val diseaseProb: Float,        // P(benh) = 1 - tong xac suat cac lop khoe, cua vung "benh" nhat
     val diseaseClass: LeafClass?,  // Neu la benh thi kha nang cao nhat la benh nay
+    val diseaseClassProb: Float,   // Xac suat cua lop benh do
     val regions: Int,              // So vung da cham diem (ca anh + cac o co la)
 ) {
-    /** Chuoi toi da 13 ky tu, Nano hien sau "AI:" tren LCD. Giong lcd_text() trong predict.py */
+    /** Chuoi toi da 16 ky tu, Nano hien nguyen dong 2 cua LCD, vd "BENH 99%". Giong lcd_text() trong predict.py */
     fun lcdText(): String = when {
-        status == "too_dark" -> "Anh qua toi"
-        status == "no_leaf" -> "Khong thay la"
-        level == "diseased" -> "Benh ${(diseaseProb * 100).toInt()}% ${diseaseClass?.code}"
-        level == "suspect" -> "Nghi ${(diseaseProb * 100).toInt()}% ${diseaseClass?.code}"
-        else -> "Khoe ${((1 - diseaseProb) * 100).toInt()}%"
+        status == "too_dark" -> "ANH QUA TOI"
+        status == "no_leaf" -> "KHONG THAY LA"
+        level == "diseased" -> "BENH ${(diseaseProb * 100).toInt()}%"
+        level == "suspect" -> "NGHI ${(diseaseProb * 100).toInt()}%"
+        else -> "KHOE ${((1 - diseaseProb) * 100).toInt()}%"
     }
 }
 
@@ -89,14 +90,14 @@ class LeafDiseaseClassifier(
     /** Phan tich 1 anh (anh ca vuon tu ESP32-CAM hoac anh 1 chiec la). */
     fun analyze(image: Bitmap): LeafResult {
         val (leafRatio, brightness) = colorStats(image)
-        if (brightness < DARK_MAX_BRIGHTNESS) return LeafResult("too_dark", "none", 0f, null, 0)
+        if (brightness < DARK_MAX_BRIGHTNESS) return LeafResult("too_dark", "none", 0f, null, 0f, 0)
 
         // Vung dau tien luon la ca anh, sau do la cac o phan lon la mau la cay
         val areas = mutableListOf(image)
         for (tile in makeTiles(image)) {
             if (colorStats(tile).first >= TILE_LEAF_MIN_RATIO) areas.add(tile)
         }
-        if (leafRatio < LEAF_MIN_RATIO && areas.size == 1) return LeafResult("no_leaf", "none", 0f, null, 0)
+        if (leafRatio < LEAF_MIN_RATIO && areas.size == 1) return LeafResult("no_leaf", "none", 0f, null, 0f, 0)
 
         val worst = classify(areas).maxBy { diseaseProbOf(it) }
         val diseaseProb = diseaseProbOf(worst)
@@ -106,7 +107,7 @@ class LeafDiseaseClassifier(
             diseaseProb >= SUSPECT_THRESHOLD -> "suspect"
             else -> "healthy"
         }
-        return LeafResult("ok", level, diseaseProb, classes[k], areas.size)
+        return LeafResult("ok", level, diseaseProb, classes[k], worst[k], areas.size)
     }
 
     /** Cham diem nhieu vung anh cung luc. Tra ve mang [so vung][15] xac suat (model da co san Softmax). */
