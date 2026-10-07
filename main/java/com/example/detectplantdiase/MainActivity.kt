@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var imageView: ImageView
     private lateinit var tvResult: TextView
+    private lateinit var tvSoil: TextView
 
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { classify(sendToEsp = false) { loadBitmap(it) } }
@@ -43,6 +45,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         imageView = findViewById(R.id.imageView)
         tvResult = findViewById(R.id.tvResult)
+        tvSoil = findViewById(R.id.tvSoil)
 
         tvResult.text = "Đang tải model..."
         lifecycleScope.launch(Dispatchers.Default) {
@@ -66,6 +69,37 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnPick).setOnClickListener { pickImage.launch("image/*") }
         // Anh tu ESP32-CAM: phan tich xong thi gui ket qua nguoc ve ESP32-CAM de chuyen xuong Nano
         findViewById<Button>(R.id.btnEsp).setOnClickListener { classify(sendToEsp = true) { fetchEspImage() } }
+        findViewById<Button>(R.id.btnSoil).setOnClickListener { refreshSoil() }
+    }
+
+    /** Doc do am dat (Nano gui sang ESP32-CAM moi 5 giay) roi hien len dong tvSoil */
+    private fun refreshSoil() {
+        tvSoil.text = "Độ ẩm đất: đang đọc..."
+        lifecycleScope.launch(Dispatchers.IO) {
+            val text = fetchSoilText()
+            withContext(Dispatchers.Main) { tvSoil.text = text }
+        }
+    }
+
+    /** Lay muc "soil" trong trang /status cua ESP32-CAM, tra ve 1 dong mo ta */
+    private fun fetchSoilText(): String = try {
+        val conn = URL("$ESP_URL/status").openConnection() as HttpURLConnection
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        val json = try {
+            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        } finally {
+            conn.disconnect()
+        }
+        val soil = json.optJSONObject("soil")  // null khi ESP chua nhan duoc dong SOIL nao tu Nano
+        when {
+            soil == null -> "Độ ẩm đất: ESP32-CAM chưa nhận được dữ liệu từ Nano"
+            soil.getBoolean("fault") -> "Độ ẩm đất: cảm biến lỗi (Raw ${soil.getInt("raw")})"
+            else -> "Độ ẩm đất: ${soil.getInt("moisture")}% • Bơm: ${if (soil.getBoolean("pump")) "BẬT" else "TẮT"}" +
+                " (${soil.getLong("age_s")} giây trước)"
+        }
+    } catch (e: Exception) {
+        "Độ ẩm đất: không đọc được (${e.message})"
     }
 
     private fun loadBitmap(uri: Uri): Bitmap {
@@ -139,20 +173,22 @@ class MainActivity : AppCompatActivity() {
                 val leafResult = leaf?.analyze(bmp)
                 val fruitResult = fruit?.predict(bmp)
                 val ms = System.currentTimeMillis() - t0
-                // LCD chi co 13 ky tu sau "AI:" nen chi gui ket qua cua model la
+                // LCD chi co 16 ky tu nen chi gui muc benh cua model la, vd "BENH 99%"
                 val lcd = leafResult?.lcdText()
                 val sent = if (sendToEsp && lcd != null) sendResultToEsp(lcd) else null
+                val soil = if (sendToEsp) fetchSoilText() else null
 
                 val text = buildString {
-                    appendLine("LÁ: " + (leafResult?.let { describe(it) } ?: "chưa có model"))
+                    appendLine(leafResult?.let { describe(it) } ?: "Lá: chưa có model")
                     appendLine("QUẢ: " + (fruitResult?.let { "${it.label} (${"%.0f".format(it.confidence * 100)}%)" }
                         ?: "chưa có model"))
-                    if (lcd != null) appendLine("LCD: AI:$lcd" + (sent?.let { " • $it" } ?: ""))
+                    if (lcd != null) appendLine("LCD: $lcd" + (sent?.let { " • $it" } ?: ""))
                     append("(${ms} ms)")
                 }
                 withContext(Dispatchers.Main) {
                     imageView.setImageBitmap(bmp)
                     tvResult.text = text
+                    if (soil != null) tvSoil.text = soil
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { tvResult.text = "Lỗi: ${e.message}" }
@@ -160,13 +196,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Mo ta ket qua model la bang 1 dong, giong describe() trong predict.py */
-    private fun describe(r: LeafResult): String = when {
-        r.status == "too_dark" -> "ảnh quá tối, không phân tích"
-        r.status == "no_leaf" -> "không thấy lá cây (camera lệch hướng?)"
-        r.level == "diseased" -> "CÓ DẤU HIỆU BỆNH ${"%.0f".format(r.diseaseProb * 100)}%: ${r.diseaseClass?.nameVi}"
-        r.level == "suspect" -> "NGHI NGỜ ${"%.0f".format(r.diseaseProb * 100)}% (${r.diseaseClass?.nameVi}), nên ra xem cây"
-        else -> "khỏe mạnh ${"%.0f".format((1 - r.diseaseProb) * 100)}%"
+    /**
+     * Mo ta ket qua model la, giong describe() trong predict.py, vd:
+     *   CO DAU HIEU BENH - xac suat benh 99%
+     *   Neu benh, kha nang nhat: Ca chua - dom vong (benh som) [Tomato_Early_blight] 98%
+     */
+    private fun describe(r: LeafResult): String {
+        if (r.status == "too_dark") return "Anh qua toi, khong phan tich"
+        if (r.status == "no_leaf") return "Khong thay la cay trong anh (camera lech huong?)"
+        val verdict = when (r.level) {
+            "diseased" -> "CO DAU HIEU BENH"
+            "suspect" -> "NGHI NGO, nen ra xem cay"
+            else -> "Khoe manh"
+        }
+        val c = r.diseaseClass
+        // toInt() lam tron xuong giong int() trong predict.py: 89.7% (muc "Nghi") hien 89%, khong thanh 90%
+        return "$verdict - xac suat benh ${(r.diseaseProb * 100).toInt()}%\n" +
+            "Neu benh, kha nang nhat: ${c?.nameVi} [${c?.id}] ${"%.0f".format(r.diseaseClassProb * 100)}%"
     }
 
     override fun onDestroy() {
