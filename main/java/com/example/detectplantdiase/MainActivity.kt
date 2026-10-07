@@ -14,16 +14,28 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
 import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var classifier: FreshnessClassifier
+    companion object {
+        // IP cua ESP32-CAM: xem dong "Da ket noi. IP: ..." tren Serial Monitor cua ESP32-CAM.
+        // Android thuong khong phan giai duoc ten esp32cam.local nen dung IP.
+        const val ESP_URL = "http://192.168.1.50"
+    }
+
+    // 2 model chay song song tren cung 1 anh: model la (benh tren la) va model qua (do tuoi cua qua).
+    // Thieu file model nao thi model do = null, app van chay phan con lai.
+    private var leafModel: LeafDiseaseClassifier? = null
+    private var fruitModel: FreshnessClassifier? = null
+    @Volatile private var modelsLoaded = false
+
     private lateinit var imageView: ImageView
     private lateinit var tvResult: TextView
 
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { classify { loadBitmap(it) } }
+        uri?.let { classify(sendToEsp = false) { loadBitmap(it) } }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,15 +46,26 @@ class MainActivity : AppCompatActivity() {
 
         tvResult.text = "Đang tải model..."
         lifecycleScope.launch(Dispatchers.Default) {
-            classifier = FreshnessClassifier(this@MainActivity)
-            withContext(Dispatchers.Main) { tvResult.text = "Sẵn sàng" }
+            val status = StringBuilder()
+            leafModel = try {
+                LeafDiseaseClassifier(this@MainActivity)
+            } catch (e: Exception) {
+                status.appendLine("Model lá: lỗi (${e.message})")
+                null
+            }
+            fruitModel = try {
+                FreshnessClassifier(this@MainActivity)
+            } catch (e: Exception) {
+                status.appendLine("Model quả: chưa có file detect_plant_disease.onnx trong assets")
+                null
+            }
+            modelsLoaded = true
+            withContext(Dispatchers.Main) { tvResult.text = status.append("Sẵn sàng").toString() }
         }
 
         findViewById<Button>(R.id.btnPick).setOnClickListener { pickImage.launch("image/*") }
-        findViewById<Button>(R.id.btnEsp).setOnClickListener {
-            // Đổi IP theo ESP32-CAM của bạn; endpoint /capture là của ví dụ CameraWebServer
-            classify { URL("http://192.168.1.50/capture").openStream().use { BitmapFactory.decodeStream(it) } }
-        }
+        // Anh tu ESP32-CAM: phan tich xong thi gui ket qua nguoc ve ESP32-CAM de chuyen xuong Nano
+        findViewById<Button>(R.id.btnEsp).setOnClickListener { classify(sendToEsp = true) { fetchEspImage() } }
     }
 
     private fun loadBitmap(uri: Uri): Bitmap {
@@ -59,17 +82,77 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun classify(getBitmap: () -> Bitmap) {
+    /** Tai 1 anh JPEG tu ESP32-CAM. Co gioi han thoi gian de app khong bi treo khi ESP32-CAM mat mang. */
+    private fun fetchEspImage(): Bitmap {
+        val conn = URL("$ESP_URL/capture").openConnection() as HttpURLConnection
+        conn.connectTimeout = 5000
+        conn.readTimeout = 20000
+        try {
+            return conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                ?: throw IllegalStateException("ESP32-CAM không trả về ảnh")
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /**
+     * Gui chuoi ket qua cho ESP32-CAM (POST /result, noi dung la text). ESP32-CAM chuyen tiep xuong Nano
+     * qua UART thanh dong "AI:<text>". Tra ve trang thai de hien len man hinh.
+     */
+    private fun sendResultToEsp(text: String): String = try {
+        val conn = URL("$ESP_URL/result").openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        conn.setRequestProperty("Content-Type", "text/plain")
+        try {
+            conn.outputStream.use { it.write(text.toByteArray()) }
+            when (val code = conn.responseCode) {
+                200 -> "đã gửi về Nano"
+                404 -> "chưa gửi được: firmware ESP32-CAM chưa có /result"
+                else -> "chưa gửi được: ESP32-CAM trả lỗi $code"
+            }
+        } finally {
+            conn.disconnect()
+        }
+    } catch (e: Exception) {
+        "chưa gửi được: ${e.message}"
+    }
+
+    private fun classify(sendToEsp: Boolean, getBitmap: () -> Bitmap) {
+        if (!modelsLoaded) {
+            tvResult.text = "Model chưa tải xong, thử lại sau vài giây"
+            return
+        }
+        val leaf = leafModel
+        val fruit = fruitModel
+        if (leaf == null && fruit == null) {
+            tvResult.text = "Không có model nào dùng được"
+            return
+        }
         tvResult.text = "Đang phân tích..."
         lifecycleScope.launch(Dispatchers.Default) {
             try {
                 val bmp = getBitmap()
                 val t0 = System.currentTimeMillis()
-                val pred = classifier.predict(bmp)
+                val leafResult = leaf?.analyze(bmp)
+                val fruitResult = fruit?.predict(bmp)
                 val ms = System.currentTimeMillis() - t0
+                // LCD chi co 13 ky tu sau "AI:" nen chi gui ket qua cua model la
+                val lcd = leafResult?.lcdText()
+                val sent = if (sendToEsp && lcd != null) sendResultToEsp(lcd) else null
+
+                val text = buildString {
+                    appendLine("LÁ: " + (leafResult?.let { describe(it) } ?: "chưa có model"))
+                    appendLine("QUẢ: " + (fruitResult?.let { "${it.label} (${"%.0f".format(it.confidence * 100)}%)" }
+                        ?: "chưa có model"))
+                    if (lcd != null) appendLine("LCD: AI:$lcd" + (sent?.let { " • $it" } ?: ""))
+                    append("(${ms} ms)")
+                }
                 withContext(Dispatchers.Main) {
                     imageView.setImageBitmap(bmp)
-                    tvResult.text = "${pred.label}\nĐộ tin cậy: ${"%.0f".format(pred.confidence * 100)}%  (${ms} ms)"
+                    tvResult.text = text
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { tvResult.text = "Lỗi: ${e.message}" }
@@ -77,8 +160,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Mo ta ket qua model la bang 1 dong, giong describe() trong predict.py */
+    private fun describe(r: LeafResult): String = when {
+        r.status == "too_dark" -> "ảnh quá tối, không phân tích"
+        r.status == "no_leaf" -> "không thấy lá cây (camera lệch hướng?)"
+        r.level == "diseased" -> "CÓ DẤU HIỆU BỆNH ${"%.0f".format(r.diseaseProb * 100)}%: ${r.diseaseClass?.nameVi}"
+        r.level == "suspect" -> "NGHI NGỜ ${"%.0f".format(r.diseaseProb * 100)}% (${r.diseaseClass?.nameVi}), nên ra xem cây"
+        else -> "khỏe mạnh ${"%.0f".format((1 - r.diseaseProb) * 100)}%"
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        if (::classifier.isInitialized) classifier.close()
+        leafModel?.close()
+        fruitModel?.close()
     }
 }
