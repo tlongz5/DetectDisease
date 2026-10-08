@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         // IP cua ESP32-CAM: xem dong "Da ket noi. IP: ..." tren Serial Monitor cua ESP32-CAM.
         // Android thuong khong phan giai duoc ten esp32cam.local nen dung IP.
-        const val ESP_URL = "http://192.168.1.50"
+        const val ESP_URL = "http://192.168.100.102"
     }
 
     // 2 model chay song song tren cung 1 anh: model la (benh tren la) va model qua (do tuoi cua qua).
