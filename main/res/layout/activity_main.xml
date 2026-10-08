@@ -21,6 +21,14 @@
         android:text="Chọn ảnh để kiểm tra"
         android:textSize="18sp" />
 
+    <TextView
+        android:id="@+id/tvSoil"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Độ ẩm đất: chưa đọc"
+        android:textSize="16sp" />
+
     <Button
         android:id="@+id/btnPick"
         android:layout_width="match_parent"
@@ -33,4 +41,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Lấy ảnh từ ESP32-CAM" />
+
+    <Button
+        android:id="@+id/btnSoil"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Xem độ ẩm đất" />
 </LinearLayout>
