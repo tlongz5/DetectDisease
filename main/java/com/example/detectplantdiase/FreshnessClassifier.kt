@@ -10,14 +10,29 @@ import java.io.File
 import java.nio.FloatBuffer
 import kotlin.math.exp
 
-data class Prediction(val label: String, val confidence: Float)
+data class FruitLabelDetail(
+    val fruit: String,
+    val status: String,
+    val summary: String
+)
+
+data class Prediction(
+    val label: String,
+    val confidence: Float,
+    val fruit: String = "",
+    val status: String = "",
+    val nameVi: String = ""
+)
 
 class FreshnessClassifier(context: Context, modelAsset: String = "detect_plant_disease.onnx") {
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private val session: OrtSession
 
     private val labels = HashMap<Int, String>()
-    private val size = 224
+    private val details = HashMap<Int, FruitLabelDetail>()
+    private val size: Int
+    private val mean: FloatArray
+    private val std: FloatArray
 
     init {
         val modelFile = File(context.filesDir, modelAsset)
@@ -28,24 +43,48 @@ class FreshnessClassifier(context: Context, modelAsset: String = "detect_plant_d
         }
         session = env.createSession(modelFile.absolutePath, OrtSession.SessionOptions())
 
-        val json = context.assets.open("labels.json").bufferedReader().use { it.readText() }
-        val map = JSONObject(json).getJSONObject("id2label")
+        val json = JSONObject(context.assets.open("labels.json").bufferedReader().use { it.readText() })
+        val map = json.getJSONObject("id2label")
         map.keys().forEach { k -> labels[k.toInt()] = map.getString(k) }
+
+        val viMap = json.optJSONObject("labels_vi")
+        if (viMap != null) {
+            viMap.keys().forEach { k ->
+                val obj = viMap.getJSONObject(k)
+                details[k.toInt()] = FruitLabelDetail(
+                    fruit = obj.optString("fruit"),
+                    status = obj.optString("status"),
+                    summary = obj.optString("summary")
+                )
+            }
+        }
+        
+        size = json.getJSONArray("input_size").getInt(0)
+        mean = FloatArray(3) { json.getJSONArray("mean").getDouble(it).toFloat() }
+        std = FloatArray(3) { json.getJSONArray("std").getDouble(it).toFloat() }
+    }
+
+    private fun preprocess(src: Bitmap): Bitmap {
+        val short = minOf(src.width, src.height)
+        val resizeShort = (size * 1.14f).toInt() // Gần tương đương với resize 256 rồi crop 224
+        val w = if (src.width == short) resizeShort else src.width * resizeShort / short
+        val h = if (src.height == short) resizeShort else src.height * resizeShort / short
+        val resized = Bitmap.createScaledBitmap(src, w, h, true)
+        return Bitmap.createBitmap(resized, (w - size) / 2, (h - size) / 2, size, size)
     }
 
     fun predict(bitmap: Bitmap): Prediction {
-        val scaled = Bitmap.createScaledBitmap(bitmap, size, size, true)
+        val cropped = preprocess(bitmap)
         val pixels = IntArray(size * size)
-        scaled.getPixels(pixels, 0, size, 0, 0, size, size)
+        cropped.getPixels(pixels, 0, size, 0, 0, size, size)
 
-        // chuẩn hoá (x/255 - 0.5) / 0.5
         val data = FloatArray(3 * size * size)
         val plane = size * size
         for (i in pixels.indices) {
             val p = pixels[i]
-            data[i]             = (((p shr 16) and 0xFF) / 255f - 0.5f) / 0.5f // R
-            data[plane + i]     = (((p shr 8) and 0xFF) / 255f - 0.5f) / 0.5f  // G
-            data[2 * plane + i] = ((p and 0xFF) / 255f - 0.5f) / 0.5f          // B
+            data[i]             = (((p shr 16) and 0xFF) / 255f - mean[0]) / std[0] // R
+            data[plane + i]     = (((p shr 8) and 0xFF) / 255f - mean[1]) / std[1]  // G
+            data[2 * plane + i] = ((p and 0xFF) / 255f - mean[2]) / std[2]          // B
         }
 
         val shape = longArrayOf(1, 3, size.toLong(), size.toLong())
@@ -58,13 +97,38 @@ class FreshnessClassifier(context: Context, modelAsset: String = "detect_plant_d
         }
     }
 
+    companion object {
+        const val CONFIDENCE_THRESHOLD = 0.5f // Tỉ lệ nhỏ hơn 50% => không rõ
+    }
+
     private fun pickTomatoPotato(logits: FloatArray): Prediction {
         val max = logits.max()
         val exps = FloatArray(logits.size) { exp(logits[it] - max) }
-        val keep = labels.filterValues { it.startsWith("Tomato") || it.startsWith("Potato") || it.startsWith("Bellpepper") }.keys
+        val keep = labels.filterValues { it.startsWith("Tomato")
+                || it.startsWith("Potato") || it.startsWith("Bellpepper") }.keys
         val total = keep.sumOf { exps[it].toDouble() }.toFloat()
         val best = keep.maxByOrNull { exps[it] }!!
-        return Prediction(labels[best]!!, exps[best] / total)
+        val conf = exps[best] / total
+        val d = details[best]
+
+        // Nhận diện quả tỉ lệ nhỏ hơn 50% thì => không rõ
+        if (conf < CONFIDENCE_THRESHOLD) {
+            return Prediction(
+                label = "unknown",
+                confidence = conf,
+                fruit = "",
+                status = "unknown",
+                nameVi = "không rõ"
+            )
+        }
+
+        return Prediction(
+            label = labels[best]!!,
+            confidence = conf,
+            fruit = d?.fruit ?: "",
+            status = d?.status ?: "",
+            nameVi = d?.summary ?: labels[best]!!
+        )
     }
 
     fun close() {

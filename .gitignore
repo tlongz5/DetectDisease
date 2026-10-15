@@ -4,3 +4,5 @@ build/
 *.iml
 local.properties
 .kotlin/
+main/assets/detect_plant_disease.onnx
+

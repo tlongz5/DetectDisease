@@ -2,4 +2,23 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="primary_green">#2E7D32</color>
+    <color name="primary_green_dark">#1B5E20</color>
+    <color name="accent_green">#4CAF50</color>
+    <color name="light_green">#E8F5E9</color>
+    <color name="bg_light">#F5F7FA</color>
+    <color name="card_bg">#FFFFFF</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="border_color">#E0E0E0</color>
+    <color name="status_connected">#2E7D32</color>
+    <color name="status_error">#D32F2F</color>
+    <color name="color_danger">#D32F2F</color>
+    <color name="color_danger_light">#FFEBEE</color>
+    <color name="color_warning">#E65100</color>
+    <color name="color_warning_light">#FFF3E0</color>
+    <color name="color_healthy">#2E7D32</color>
+    <color name="color_healthy_light">#E8F5E9</color>
+    <color name="color_info">#1976D2</color>
+    <color name="color_info_light">#E3F2FD</color>
 </resources>
