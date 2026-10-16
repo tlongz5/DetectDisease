@@ -88,31 +88,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Gui chuoi ket qua cho ESP32-CAM (POST /result, noi dung text toi da 16 ky tu). ESP32-CAM chuyen tiep xuong Nano
-     * qua UART de hien len dong LCD. Tra ve trang thai de hien len man hinh.
-     */
-    private fun sendResultToEsp(text: String): String = try {
-        val conn = ConfigManager.openEsp(this, "${ConfigManager.getBaseUrl(this)}/result")
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        conn.setRequestProperty("Content-Type", "text/plain")
-        try {
-            conn.outputStream.use { it.write(text.toByteArray()) }
-            when (val code = conn.responseCode) {
-                200 -> "đã gửi về Nano"
-                404 -> "chưa gửi được: firmware ESP32-CAM chưa có /result"
-                else -> "chưa gửi được: ESP32-CAM trả lỗi $code"
-            }
-        } finally {
-            conn.disconnect()
-        }
-    } catch (e: Exception) {
-        "chưa gửi được: ${e.message}"
-    }
-
     private fun classify(sendToEsp: Boolean, getBitmap: () -> Bitmap) {
         if (!modelsLoaded) {
             tvResult.text = "Model chưa tải xong, thử lại sau vài giây"
@@ -132,15 +107,17 @@ class MainActivity : AppCompatActivity() {
                 val leafResult = leaf?.analyze(bmp)
                 val fruitResult = fruit?.predict(bmp)
                 val ms = System.currentTimeMillis() - t0
-                // LCD 1602: gui ket qua toi da 16 ky tu (tieng Viet khong dau) cua model la
-                val lcd = leafResult?.lcdText()
-                val sent = if (sendToEsp && lcd != null) sendResultToEsp(lcd) else null
+                // LCD 1602 cua Nano: dong 1 = la, dong 2 = qua. Anh chon tu thu vien thi chi xem truoc, khong gui
+                val lcd = LcdMessage.from(leafResult, fruitResult)
+                val sent = if (sendToEsp) lcd.sendTo(this@MainActivity, ConfigManager.getBaseUrl(this@MainActivity)) else null
 
                 val text = buildString {
                     appendLine("LÁ: " + (leafResult?.let { describe(it) } ?: "chưa có model"))
                     appendLine("QUẢ: " + (fruitResult?.let { "${it.label} (${"%.0f".format(it.confidence * 100)}%)" }
                         ?: "chưa có model"))
-                    if (lcd != null) appendLine("LCD: $lcd" + (sent?.let { " • $it" } ?: ""))
+                    appendLine("LCD dòng 1: ${lcd.leafLine}")
+                    appendLine("LCD dòng 2: ${lcd.fruitLine}")
+                    if (sent != null) appendLine("ESP32-CAM: $sent")
                     append("(${ms} ms)")
                 }
                 withContext(Dispatchers.Main) {

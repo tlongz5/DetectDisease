@@ -26,42 +26,9 @@ data class LeafResult(
     val diseaseProb: Float,        // P(benh) = 1 - tong xac suat cac lop khoe, cua vung "benh" nhat
     val diseaseClass: LeafClass?,  // Neu la benh thi kha nang cao nhat la benh nay
     val regions: Int,              // So vung da cham diem (ca anh + cac o co la)
-) {
-    /** Chuoi toi da 16 ky tu hien tren 1 dong man hinh LCD 1602 (Phuong an B: tan dung toi da 16 ky tu, bo tien to AI:) */
-    fun lcdText(): String = when {
-        status == "too_dark" -> "Anh qua toi"
-        status == "no_leaf" -> "Khong thay la"
-        level == "diseased" -> {
-            val pct = (diseaseProb * 100).toInt().coerceIn(1, 99)
-            val name = diseaseClass?.lcdVi ?: "Benh"
-            val text = "$name $pct%"
-            if (text.length <= 16) text else {
-                val short = when (name) {
-                    "Dom vi khuan" -> "Dom VK"
-                    "Dom muc tieu" -> "Muc tieu"
-                    "Dom Septoria" -> "Septoria"
-                    else -> name
-                }
-                "$short $pct%".take(16)
-            }
-        }
-        level == "suspect" -> {
-            val pct = (diseaseProb * 100).toInt().coerceIn(1, 99)
-            val rawName = diseaseClass?.lcdVi ?: "Nghi"
-            val short = when (rawName) {
-                "Dom vi khuan" -> "Dom VK"
-                "Dom muc tieu" -> "Muc tieu"
-                "Dom Septoria" -> "Septoria"
-                else -> rawName
-            }
-            "?$short $pct%".take(16)
-        }
-        else -> {
-            val pct = ((1 - diseaseProb) * 100).toInt().coerceIn(1, 100)
-            "Cay khoe $pct%"
-        }
-    }
-}
+    val healthyClass: LeafClass? = null,  // Lop "khoe" kha nang cao nhat, de biet la cay gi khi la khoe
+)
+// Chu hien len LCD (2 dong la + qua) nam o LcdMessage.kt
 
 /**
  * Model phat hien benh tren la (EfficientNet-B0, 15 lop) chay bang ONNX Runtime.
@@ -139,12 +106,13 @@ class LeafDiseaseClassifier(
         val worst = classify(areas).maxBy { diseaseProbOf(it) }
         val diseaseProb = diseaseProbOf(worst)
         val k = diseaseIdx.maxBy { worst[it] }  // Chi xet cac lop benh de biet "neu benh thi la benh gi"
+        val h = healthyIdx.maxBy { worst[it] }  // Chi xet cac lop khoe de biet "neu khoe thi la cay gi"
         val level = when {
             diseaseProb >= DISEASE_THRESHOLD -> "diseased"
             diseaseProb >= SUSPECT_THRESHOLD -> "suspect"
             else -> "healthy"
         }
-        return LeafResult("ok", level, diseaseProb, classes[k], areas.size)
+        return LeafResult("ok", level, diseaseProb, classes[k], areas.size, classes[h])
     }
 
     /** Cham diem nhieu vung anh cung luc. Tra ve mang [so vung][15] xac suat (model da co san Softmax). */

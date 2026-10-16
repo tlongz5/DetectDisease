@@ -33,5 +33,5 @@ data class DetectionRecord(
 
     // Thông số kỹ thuật
     val inferenceTimeMs: Long,
-    val lcdText: String? = null
+    val lcdText: String? = null     // 2 dòng đã gửi lên LCD (lá, quả), cách nhau bằng "\n"
 ) : Serializable

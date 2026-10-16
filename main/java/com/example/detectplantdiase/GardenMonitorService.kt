@@ -294,10 +294,9 @@ class GardenMonitorService : Service() {
                 val fruitResult = fruitModel?.predict(bmp)
                 val ms = System.currentTimeMillis() - t0
 
-                val lcd = leafResult?.lcdText()
-                if (lcd != null) {
-                    sendResultToEsp(espUrl, lcd)
-                }
+                // Gửi 2 dòng (lá, quả) về ESP32-CAM để Nano hiện lên LCD trong 20 giây
+                val lcd = LcdMessage.from(leafResult, fruitResult)
+                val sent = lcd.sendTo(this@GardenMonitorService, espUrl)
 
                 // Lưu vào nhật ký HistoryManager
                 val record = HistoryManager.saveDetection(
@@ -307,7 +306,7 @@ class GardenMonitorService : Service() {
                     fruitResult = fruitResult,
                     source = if (manualTrigger) "ESP32-CAM (Chụp ngay)" else "ESP32-CAM (Tự động)",
                     inferenceTimeMs = ms,
-                    lcdText = lcd
+                    lcdText = lcd.lcdText()
                 )
 
                 // Phát broadcast để màn hình Daily/Main cập nhật giao diện ngay
@@ -319,7 +318,7 @@ class GardenMonitorService : Service() {
                 }
 
                 val currentTimeStr = formatClockTime(System.currentTimeMillis())
-                updateOngoingNotification("Chụp xong lúc $currentTimeStr (${record.overallTitle})")
+                updateOngoingNotification("Chụp xong lúc $currentTimeStr (${record.overallTitle}) • LCD: $sent")
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -349,26 +348,6 @@ class GardenMonitorService : Service() {
         } finally {
             conn.disconnect()
         }
-    }
-
-    private fun sendResultToEsp(espUrl: String, text: String): String = try {
-        val conn = ConfigManager.openEsp(this, "$espUrl/result")
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        conn.setRequestProperty("Content-Type", "text/plain")
-        try {
-            conn.outputStream.use { it.write(text.toByteArray()) }
-            when (conn.responseCode) {
-                200 -> "đã gửi về Nano"
-                else -> "lỗi code ${conn.responseCode}"
-            }
-        } finally {
-            conn.disconnect()
-        }
-    } catch (e: Exception) {
-        "lỗi: ${e.message}"
     }
 
     private fun buildOngoingNotification(statusText: String): Notification {
