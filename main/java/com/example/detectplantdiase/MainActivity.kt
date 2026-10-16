@@ -14,16 +14,8 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 
 class MainActivity : AppCompatActivity() {
-
-    companion object {
-        // IP cua ESP32-CAM: xem dong "Da ket noi. IP: ..." tren Serial Monitor cua ESP32-CAM.
-        // Android thuong khong phan giai duoc ten esp32cam.local nen dung IP.
-        const val ESP_URL = "http://10.101.6.32"
-    }
 
     // 2 model chay song song tren cung 1 anh: model la (benh tren la) va model qua (do tuoi cua qua).
     // Thieu file model nao thi model do = null, app van chay phan con lai.
@@ -84,7 +76,8 @@ class MainActivity : AppCompatActivity() {
 
     /** Tai 1 anh JPEG tu ESP32-CAM. Co gioi han thoi gian de app khong bi treo khi ESP32-CAM mat mang. */
     private fun fetchEspImage(): Bitmap {
-        val conn = URL("$ESP_URL/capture").openConnection() as HttpURLConnection
+        // Dia chi ESP lay tu man hinh cai dat (ConfigManager), vao WiFi TuoiCay-CAM thi tu dung 192.168.4.1
+        val conn = ConfigManager.openEsp(this, "${ConfigManager.getBaseUrl(this)}/capture")
         conn.connectTimeout = 5000
         conn.readTimeout = 20000
         try {
@@ -100,7 +93,7 @@ class MainActivity : AppCompatActivity() {
      * qua UART de hien len dong LCD. Tra ve trang thai de hien len man hinh.
      */
     private fun sendResultToEsp(text: String): String = try {
-        val conn = URL("$ESP_URL/result").openConnection() as HttpURLConnection
+        val conn = ConfigManager.openEsp(this, "${ConfigManager.getBaseUrl(this)}/result")
         conn.requestMethod = "POST"
         conn.doOutput = true
         conn.connectTimeout = 5000

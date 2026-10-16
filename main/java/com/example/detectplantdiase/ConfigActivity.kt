@@ -16,8 +16,6 @@ import com.example.detectplantdiase.databinding.ActivityConfigBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 
 class ConfigActivity : AppCompatActivity() {
 
@@ -156,8 +154,7 @@ class ConfigActivity : AppCompatActivity() {
             var errorMsg = ""
 
             try {
-                val url = URL("http://$cleanIp/")
-                val conn = url.openConnection() as HttpURLConnection
+                val conn = ConfigManager.openEsp(this@ConfigActivity, "http://$cleanIp/")
                 conn.connectTimeout = 3000
                 conn.readTimeout = 3000
                 conn.requestMethod = "GET"

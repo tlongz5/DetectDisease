@@ -23,8 +23,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -342,7 +340,7 @@ class GardenMonitorService : Service() {
     }
 
     private fun fetchEspImage(captureUrl: String): Bitmap {
-        val conn = URL(captureUrl).openConnection() as HttpURLConnection
+        val conn = ConfigManager.openEsp(this, captureUrl)
         conn.connectTimeout = 7000
         conn.readTimeout = 25000
         try {
@@ -354,7 +352,7 @@ class GardenMonitorService : Service() {
     }
 
     private fun sendResultToEsp(espUrl: String, text: String): String = try {
-        val conn = URL("$espUrl/result").openConnection() as HttpURLConnection
+        val conn = ConfigManager.openEsp(this, "$espUrl/result")
         conn.requestMethod = "POST"
         conn.doOutput = true
         conn.connectTimeout = 5000

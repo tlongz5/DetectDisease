@@ -2,6 +2,11 @@ package com.example.detectplantdiase
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Quản lý lưu trữ và truy xuất cấu hình IP ESP32-CAM và chế độ chụp ảnh
@@ -26,6 +31,10 @@ object ConfigManager {
     const val UNIT_DAYS = "DAYS"
 
     const val DEFAULT_IP = "192.168.100.102"
+
+    // ESP32-CAM tu phat WiFi "TuoiCay-CAM" voi IP co dinh. Dien thoai vao mang nay thi app tu goi dia chi nay
+    const val ESP_AP_IP = "192.168.4.1"
+    private const val ESP_AP_PREFIX = "192.168.4."
     const val DEFAULT_START_DELAY = 0f
     const val DEFAULT_INTERVAL = 1f
     const val DEFAULT_MODE = MODE_INSTANT
@@ -107,10 +116,40 @@ object ConfigManager {
             .trimEnd('/')
     }
 
+    /** Mang WiFi dien thoai dang noi, null neu khong noi WiFi */
+    @Suppress("DEPRECATION") // allNetworks van chay tren Android moi; cach thay the phai dang ky callback
+    private fun wifiNetwork(context: Context): Network? {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
+        return cm.allNetworks.firstOrNull {
+            cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
+    }
+
+    /** Dien thoai dang vao thang WiFi TuoiCay-CAM cua ESP32-CAM: IP WiFi cua dien thoai co dang 192.168.4.x */
+    fun isOnEspAp(context: Context): Boolean {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        val net = wifiNetwork(context) ?: return false
+        return cm.getLinkProperties(net)?.linkAddresses?.any {
+            it.address.hostAddress?.startsWith(ESP_AP_PREFIX) == true
+        } == true
+    }
+
     /**
-     * URL cơ sở để gọi API, ví dụ: "http://192.168.1.50"
+     * Mo ket noi HTTP toi ESP32-CAM, luon di qua WiFi. Mang TuoiCay-CAM khong co Internet nen Android van coi 4G la
+     * mang chinh: ket noi khong gan vao WiFi se di qua 4G va khong bao gio toi duoc ESP.
+     */
+    fun openEsp(context: Context, url: String): HttpURLConnection {
+        val u = URL(url)
+        val net = wifiNetwork(context)
+        return (net?.openConnection(u) ?: u.openConnection()) as HttpURLConnection
+    }
+
+    /**
+     * URL cơ sở để gọi API, ví dụ: "http://192.168.1.50".
+     * Đang vào WiFi TuoiCay-CAM thì luôn là http://192.168.4.1, không phụ thuộc IP đã lưu.
      */
     fun getBaseUrl(context: Context): String {
+        if (isOnEspAp(context)) return "http://$ESP_AP_IP"
         val ip = getIp(context)
         return "http://$ip"
     }
