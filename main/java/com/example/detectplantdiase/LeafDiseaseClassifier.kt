@@ -11,7 +11,13 @@ import java.nio.FloatBuffer
 import kotlin.math.roundToInt
 
 /** 1 lop trong leaf_labels.json (file labels.json do ai/export_onnx.py tao ra) */
-data class LeafClass(val id: String, val code: String, val nameVi: String, val healthy: Boolean)
+data class LeafClass(
+    val id: String,
+    val code: String,
+    val nameVi: String,
+    val healthy: Boolean,
+    val lcdVi: String = code,
+)
 
 /** Ket qua phan tich 1 anh, giong Predictor.analyze() trong ai/predict.py */
 data class LeafResult(
@@ -19,16 +25,41 @@ data class LeafResult(
     val level: String,             // "healthy" / "suspect" / "diseased" ("none" khi status khac "ok")
     val diseaseProb: Float,        // P(benh) = 1 - tong xac suat cac lop khoe, cua vung "benh" nhat
     val diseaseClass: LeafClass?,  // Neu la benh thi kha nang cao nhat la benh nay
-    val diseaseClassProb: Float,   // Xac suat cua lop benh do
     val regions: Int,              // So vung da cham diem (ca anh + cac o co la)
 ) {
-    /** Chuoi toi da 16 ky tu, Nano hien nguyen dong 2 cua LCD, vd "BENH 99%". Giong lcd_text() trong predict.py */
+    /** Chuoi toi da 16 ky tu hien tren 1 dong man hinh LCD 1602 (Phuong an B: tan dung toi da 16 ky tu, bo tien to AI:) */
     fun lcdText(): String = when {
-        status == "too_dark" -> "ANH QUA TOI"
-        status == "no_leaf" -> "KHONG THAY LA"
-        level == "diseased" -> "BENH ${(diseaseProb * 100).toInt()}%"
-        level == "suspect" -> "NGHI ${(diseaseProb * 100).toInt()}%"
-        else -> "KHOE ${((1 - diseaseProb) * 100).toInt()}%"
+        status == "too_dark" -> "Anh qua toi"
+        status == "no_leaf" -> "Khong thay la"
+        level == "diseased" -> {
+            val pct = (diseaseProb * 100).toInt().coerceIn(1, 99)
+            val name = diseaseClass?.lcdVi ?: "Benh"
+            val text = "$name $pct%"
+            if (text.length <= 16) text else {
+                val short = when (name) {
+                    "Dom vi khuan" -> "Dom VK"
+                    "Dom muc tieu" -> "Muc tieu"
+                    "Dom Septoria" -> "Septoria"
+                    else -> name
+                }
+                "$short $pct%".take(16)
+            }
+        }
+        level == "suspect" -> {
+            val pct = (diseaseProb * 100).toInt().coerceIn(1, 99)
+            val rawName = diseaseClass?.lcdVi ?: "Nghi"
+            val short = when (rawName) {
+                "Dom vi khuan" -> "Dom VK"
+                "Dom muc tieu" -> "Muc tieu"
+                "Dom Septoria" -> "Septoria"
+                else -> rawName
+            }
+            "?$short $pct%".take(16)
+        }
+        else -> {
+            val pct = ((1 - diseaseProb) * 100).toInt().coerceIn(1, 100)
+            "Cay khoe $pct%"
+        }
     }
 }
 
@@ -81,7 +112,13 @@ class LeafDiseaseClassifier(
         classes = List(arr.length()) { i ->
             val c = arr.getJSONObject(i)
             require(c.getInt("index") == i) { "$labelsAsset: nhan thu $i bi sai thu tu" }
-            LeafClass(c.getString("id"), c.getString("code"), c.getString("name_vi"), c.getBoolean("is_healthy"))
+            LeafClass(
+                id = c.getString("id"),
+                code = c.getString("code"),
+                nameVi = c.getString("name_vi"),
+                healthy = c.getBoolean("is_healthy"),
+                lcdVi = c.optString("lcd_vi", c.getString("code"))
+            )
         }
         healthyIdx = classes.indices.filter { classes[it].healthy }
         diseaseIdx = classes.indices.filter { !classes[it].healthy }
@@ -90,14 +127,14 @@ class LeafDiseaseClassifier(
     /** Phan tich 1 anh (anh ca vuon tu ESP32-CAM hoac anh 1 chiec la). */
     fun analyze(image: Bitmap): LeafResult {
         val (leafRatio, brightness) = colorStats(image)
-        if (brightness < DARK_MAX_BRIGHTNESS) return LeafResult("too_dark", "none", 0f, null, 0f, 0)
+        if (brightness < DARK_MAX_BRIGHTNESS) return LeafResult("too_dark", "none", 0f, null, 0)
 
         // Vung dau tien luon la ca anh, sau do la cac o phan lon la mau la cay
         val areas = mutableListOf(image)
         for (tile in makeTiles(image)) {
             if (colorStats(tile).first >= TILE_LEAF_MIN_RATIO) areas.add(tile)
         }
-        if (leafRatio < LEAF_MIN_RATIO && areas.size == 1) return LeafResult("no_leaf", "none", 0f, null, 0f, 0)
+        if (leafRatio < LEAF_MIN_RATIO && areas.size == 1) return LeafResult("no_leaf", "none", 0f, null, 0)
 
         val worst = classify(areas).maxBy { diseaseProbOf(it) }
         val diseaseProb = diseaseProbOf(worst)
@@ -107,7 +144,7 @@ class LeafDiseaseClassifier(
             diseaseProb >= SUSPECT_THRESHOLD -> "suspect"
             else -> "healthy"
         }
-        return LeafResult("ok", level, diseaseProb, classes[k], worst[k], areas.size)
+        return LeafResult("ok", level, diseaseProb, classes[k], areas.size)
     }
 
     /** Cham diem nhieu vung anh cung luc. Tra ve mang [so vung][15] xac suat (model da co san Softmax). */

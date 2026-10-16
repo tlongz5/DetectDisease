@@ -2,6 +2,14 @@
   "id2label": {
     "0": "Bellpepper_fresh",
     "1": "Bellpepper_intermediate_fresh",
+    "2": "Bellpepper_rotten",
+    "3": "Carrot_fresh",
+    "4": "Carrot_intermediate_fresh",
+    "5": "Carrot_rotten",
+    "6": "Cucumber_fresh",
+    "7": "Cucumber_intermediate_fresh",
+    "8": "Cucumber_rotten",
+    "9": "Potato_fresh",
     "10": "Potato_intermediate_fresh",
     "11": "Potato_rotten",
     "12": "Tomato_fresh",
@@ -12,7 +20,6 @@
     "17": "ripe_mango",
     "18": "ripe_oranges",
     "19": "ripe_strawberry",
-    "2": "Bellpepper_rotten",
     "20": "rotten_apple",
     "21": "rotten_banana",
     "22": "rotten_mango",
@@ -22,14 +29,159 @@
     "26": "unripe_banana",
     "27": "unripe_mango",
     "28": "unripe_oranges",
-    "29": "unripe_strawberry",
-    "3": "Carrot_fresh",
-    "4": "Carrot_intermediate_fresh",
-    "5": "Carrot_rotten",
-    "6": "Cucumber_fresh",
-    "7": "Cucumber_intermediate_fresh",
-    "8": "Cucumber_rotten",
-    "9": "Potato_fresh"
+    "29": "unripe_strawberry"
+  },
+  "labels_vi": {
+    "0": {
+      "fruit": "Ớt chuông",
+      "status": "Tươi",
+      "summary": "Ớt chuông tươi"
+    },
+    "1": {
+      "fruit": "Ớt chuông",
+      "status": "Kém tươi",
+      "summary": "Ớt chuông kém tươi"
+    },
+    "2": {
+      "fruit": "Ớt chuông",
+      "status": "Thối hỏng",
+      "summary": "Ớt chuông thối hỏng"
+    },
+    "3": {
+      "fruit": "Cà rốt",
+      "status": "Tươi",
+      "summary": "Cà rốt tươi"
+    },
+    "4": {
+      "fruit": "Cà rốt",
+      "status": "Kém tươi",
+      "summary": "Cà rốt kém tươi"
+    },
+    "5": {
+      "fruit": "Cà rốt",
+      "status": "Thối hỏng",
+      "summary": "Cà rốt thối hỏng"
+    },
+    "6": {
+      "fruit": "Dưa chuột",
+      "status": "Tươi",
+      "summary": "Dưa chuột tươi"
+    },
+    "7": {
+      "fruit": "Dưa chuột",
+      "status": "Kém tươi",
+      "summary": "Dưa chuột kém tươi"
+    },
+    "8": {
+      "fruit": "Dưa chuột",
+      "status": "Thối hỏng",
+      "summary": "Dưa chuột thối hỏng"
+    },
+    "9": {
+      "fruit": "Khoai tây",
+      "status": "Củ tươi",
+      "summary": "Khoai tây tươi"
+    },
+    "10": {
+      "fruit": "Khoai tây",
+      "status": "Kém tươi",
+      "summary": "Khoai tây kém tươi"
+    },
+    "11": {
+      "fruit": "Khoai tây",
+      "status": "Thối hỏng",
+      "summary": "Khoai tây thối hỏng"
+    },
+    "12": {
+      "fruit": "Cà chua",
+      "status": "Tươi",
+      "summary": "Cà chua tươi"
+    },
+    "13": {
+      "fruit": "Cà chua",
+      "status": "Kém tươi",
+      "summary": "Cà chua kém tươi"
+    },
+    "14": {
+      "fruit": "Cà chua",
+      "status": "Thối hỏng",
+      "summary": "Cà chua thối hỏng"
+    },
+    "15": {
+      "fruit": "Táo",
+      "status": "Chín",
+      "summary": "Táo chín"
+    },
+    "16": {
+      "fruit": "Chuối",
+      "status": "Chín",
+      "summary": "Chuối chín"
+    },
+    "17": {
+      "fruit": "Xoài",
+      "status": "Chín",
+      "summary": "Xoài chín"
+    },
+    "18": {
+      "fruit": "Cam",
+      "status": "Chín",
+      "summary": "Cam chín"
+    },
+    "19": {
+      "fruit": "Dâu tây",
+      "status": "Chín",
+      "summary": "Dâu tây chín"
+    },
+    "20": {
+      "fruit": "Táo",
+      "status": "Thối hỏng",
+      "summary": "Táo thối hỏng"
+    },
+    "21": {
+      "fruit": "Chuối",
+      "status": "Thối hỏng",
+      "summary": "Chuối thối hỏng"
+    },
+    "22": {
+      "fruit": "Xoài",
+      "status": "Thối hỏng",
+      "summary": "Xoài thối hỏng"
+    },
+    "23": {
+      "fruit": "Cam",
+      "status": "Thối hỏng",
+      "summary": "Cam thối hỏng"
+    },
+    "24": {
+      "fruit": "Dâu tây",
+      "status": "Thối hỏng",
+      "summary": "Dâu tây thối hỏng"
+    },
+    "25": {
+      "fruit": "Táo",
+      "status": "Còn xanh",
+      "summary": "Táo còn xanh"
+    },
+    "26": {
+      "fruit": "Chuối",
+      "status": "Còn xanh",
+      "summary": "Chuối còn xanh"
+    },
+    "27": {
+      "fruit": "Xoài",
+      "status": "Còn xanh",
+      "summary": "Xoài còn xanh"
+    },
+    "28": {
+      "fruit": "Cam",
+      "status": "Còn xanh",
+      "summary": "Cam còn xanh"
+    },
+    "29": {
+      "fruit": "Dâu tây",
+      "status": "Còn xanh",
+      "summary": "Dâu tây còn xanh"
+    }
   },
   "input_size": [
     224,

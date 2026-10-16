@@ -2,7 +2,9 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.DetectPlantDiase" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/primary_green</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
 
     <style name="Theme.DetectPlantDiase" parent="Base.Theme.DetectPlantDiase" />
