@@ -32,6 +32,9 @@ android {
         getByName("androidTest") { java.srcDirs("androidTest/java") }
     }
 
+    // ConfigActivity, HistoryAdapter... dung ViewBinding (ActivityConfigBinding, ItemDetectionBinding...)
+    buildFeatures { viewBinding = true }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
