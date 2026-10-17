@@ -25,8 +25,8 @@ class LcdMessageTest {
         val m = LcdMessage.from(leaf("healthy", 0.02f, tomatoLateBlight, tomatoHealthy), fruit("Tomato_fresh", 0.92f))
         assertEquals("La ca chua: Khoe 98%", m.leafLine)
         assertEquals("Qua ca chua: Tuoi 92%", m.fruitLine)
-        assertEquals(0, m.leafLevel)
-        assertEquals("La ca chua: Khoe 98%\nQua ca chua: Tuoi 92%\n0", m.body())
+        assertEquals(LcdMessage.MIST_NORMAL, m.mistMode)
+        assertEquals("La ca chua: Khoe 98%\nQua ca chua: Tuoi 92%\n1\n1760000000", m.body(1760000000))
         assertEquals("La ca chua: Khoe 98%\nQua ca chua: Tuoi 92%", m.lcdText())
     }
 
@@ -36,7 +36,7 @@ class LcdMessageTest {
         val m = LcdMessage.from(leaf("diseased", 0.976f, potatoLateBlight, tomatoHealthy), fruit("Potato_rotten", 0.955f))
         assertEquals("La khoai tay: Moc suong 97%", m.leafLine)
         assertEquals("Cu khoai tay: Thoi hong 95%", m.fruitLine)
-        assertEquals(2, m.leafLevel)
+        assertEquals(LcdMessage.MIST_STOP, m.mistMode)
     }
 
     @Test
@@ -45,7 +45,7 @@ class LcdMessageTest {
             fruit("Bellpepper_intermediate_fresh", 0.8f))
         assertEquals("La ot chuong: Nghi Dom vi khuan 75%", m.leafLine)
         assertEquals("Qua ot chuong: Kem tuoi 80%", m.fruitLine)
-        assertEquals(1, m.leafLevel)
+        assertEquals(LcdMessage.MIST_STOP, m.mistMode)
     }
 
     @Test
@@ -61,7 +61,7 @@ class LcdMessageTest {
         val m = LcdMessage.from(dark, fruit("Tomato_fresh", 0.99f))
         assertEquals("Anh qua toi", m.leafLine)
         assertEquals("Khong ro qua", m.fruitLine)
-        assertEquals(0, m.leafLevel)
+        assertEquals(LcdMessage.MIST_KEEP, m.mistMode)
     }
 
     @Test
@@ -82,13 +82,36 @@ class LcdMessageTest {
         val m = LcdMessage.from(null, null)
         assertEquals("Thieu model la", m.leafLine)
         assertEquals("Thieu model qua", m.fruitLine)
-        assertEquals(0, m.leafLevel)
+        assertEquals(LcdMessage.MIST_KEEP, m.mistMode)
     }
 
     @Test
     fun unmappedFruitLabel_fallsBackToAsciiName() {
         val m = LcdMessage.from(null, fruit("Carrot_fresh", 0.9f, nameVi = "Cà rốt tươi đẹp"))
         assertEquals("Ca rot tuoi dep 90%", m.fruitLine)
+    }
+
+    @Test
+    fun mistMode_followsLeafHealth() {
+        val spiderMites = cls("Tomato_Spider_mites", "Nhen do")
+        val mosaic = cls("Tomato_Mosaic", "Kham la")
+        fun mode(level: String, p: Float, d: LeafClass) = LcdMessage.from(leaf(level, p, d, tomatoHealthy), null).mistMode
+
+        assertEquals(LcdMessage.MIST_BOOST, mode("diseased", 0.95f, spiderMites))  // Nhen do so am
+        assertEquals(LcdMessage.MIST_STOP, mode("suspect", 0.7f, spiderMites))     // Chua chac: dung
+        assertEquals(LcdMessage.MIST_NORMAL, mode("diseased", 0.95f, mosaic))      // Virus: phun binh thuong
+        assertEquals(LcdMessage.MIST_STOP, mode("diseased", 0.95f, tomatoLateBlight))
+        assertEquals(LcdMessage.MIST_NORMAL, mode("healthy", 0.1f, tomatoLateBlight))
+        assertEquals(LcdMessage.MIST_KEEP, LcdMessage.from(LeafResult("no_leaf", "none", 0f, null, 1), null).mistMode)
+    }
+
+    /** Ten lop nhen do / virus trong LcdMessage phai dung ten trong leaf_labels.json, doi ten model thi test bao */
+    @Test
+    fun mistClassIds_existInLabels() {
+        val json = File("main/assets/leaf_labels.json").readText()
+        for (id in listOf("Tomato_Spider_mites", "Tomato_Mosaic", "Tomato_Yellow_Curl")) {
+            assertTrue("leaf_labels.json khong co lop $id", json.contains("\"id\": \"$id\""))
+        }
     }
 
     /** Moi lop that trong leaf_labels.json: co ten cay, chi ASCII, khong qua MAX_LINE ky tu */

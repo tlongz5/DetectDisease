@@ -10,13 +10,17 @@ import java.text.Normalizer
  *   "Qua ca chua: Tuoi 92%"
  * LCD khong hien duoc dau tieng Viet nen chi dung ky tu ASCII. Dong dai hon 16 ky tu thi Nano cho chay chu.
  *
- * leafLevel: 0 = khong thay benh (la khoe hoac khong xem duoc la), 1 = nghi benh, 2 = benh.
- * Nano dung muc nay de dung phun suong khi la benh (la uot lam benh nam lan nhanh hon).
+ * mistMode: che do phun suong theo tinh trang la (xem MIST_*). La uot lam benh nam, vi khuan lan nhanh
+ * nen la benh thi dung phun; nhen do so am nen phun day hon.
  */
-data class LcdMessage(val leafLine: String, val fruitLine: String, val leafLevel: Int) {
+data class LcdMessage(val leafLine: String, val fruitLine: String, val mistMode: Int) {
 
-    /** Than POST /result, dang text 3 dong: "<dong la>\n<dong qua>\n<muc 0/1/2>" */
-    fun body(): String = "$leafLine\n$fruitLine\n$leafLevel"
+    /**
+     * Than POST /result, dang text 4 dong: "<dong la>\n<dong qua>\n<che do phun>\n<gio Unix, giay>".
+     * Gio cua dien thoai giup ESP32-CAM biet gio ca khi khong co Internet (chi phat WiFi TuoiCay-CAM).
+     */
+    fun body(nowSec: Long = System.currentTimeMillis() / 1000): String =
+        "$leafLine\n$fruitLine\n$mistMode\n$nowSec"
 
     /** 2 dong hien tren LCD, de luu vao lich su */
     fun lcdText(): String = "$leafLine\n$fruitLine"
@@ -50,6 +54,16 @@ data class LcdMessage(val leafLine: String, val fruitLine: String, val leafLevel
         /** Moi dong toi da 40 ky tu, khop RESULT_MAX_LEN cua firmware ESP32-CAM (RAM Nano co han) */
         const val MAX_LINE = 40
 
+        // Che do phun suong, khop MIST_* trong src/main.cpp cua Nano
+        const val MIST_KEEP = 0    // Khong xem duoc la (anh toi, khong thay la): giu che do dang chay
+        const val MIST_NORMAL = 1  // 30 giay moi 30 phut, 8h-16h
+        const val MIST_STOP = 2    // Dung phun: la benh nam / vi khuan, hoac nghi benh
+        const val MIST_BOOST = 3   // 30 giay moi 15 phut, 8h-16h: chac chan nhen do
+
+        private const val SPIDER_MITES = "Tomato_Spider_mites"
+        // Benh virus lay qua con trung / tiep xuc, do am la khong lam benh nang them
+        private val VIRUS = setOf("Tomato_Mosaic", "Tomato_Yellow_Curl")
+
         // Ten cay theo phan dau id lop cua model la (leaf_labels.json), vd "Tomato_Late_blight" -> "ca chua"
         private val LEAF_PLANT = mapOf(
             "Tomato" to "ca chua",
@@ -70,13 +84,20 @@ data class LcdMessage(val leafLine: String, val fruitLine: String, val leafLevel
         )
 
         /** Tao 2 dong LCD tu ket qua 2 model. Model nao chua co (null) thi dong do bao thieu model. */
-        fun from(leaf: LeafResult?, fruit: Prediction?): LcdMessage {
-            val level = when (leaf?.takeIf { it.status == "ok" }?.level) {
-                "diseased" -> 2
-                "suspect" -> 1
-                else -> 0
+        fun from(leaf: LeafResult?, fruit: Prediction?): LcdMessage =
+            LcdMessage(clean(leafLine(leaf)), clean(fruitLine(fruit, leaf)), mistMode(leaf))
+
+        private fun mistMode(r: LeafResult?): Int {
+            if (r == null || r.status != "ok") return MIST_KEEP
+            return when (r.level) {
+                "healthy" -> MIST_NORMAL
+                "suspect" -> MIST_STOP  // Chua chac benh gi: dung cho an toan
+                else -> when (r.diseaseClass?.id) {  // "diseased": P(benh) >= 90%
+                    SPIDER_MITES -> MIST_BOOST
+                    in VIRUS -> MIST_NORMAL
+                    else -> MIST_STOP
+                }
             }
-            return LcdMessage(clean(leafLine(leaf)), clean(fruitLine(fruit, leaf)), level)
         }
 
         private fun leafLine(r: LeafResult?): String {
