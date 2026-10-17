@@ -23,32 +23,30 @@ data class LeafClass(
 data class LeafResult(
     val status: String,            // "ok" / "too_dark" / "no_leaf"
     val level: String,             // "healthy" / "suspect" / "diseased" ("none" khi status khac "ok")
-    val diseaseProb: Float,        // P(benh) = 1 - tong xac suat cac lop khoe, cua vung "benh" nhat
+    val diseaseProb: Float,        // P(benh) cua ca anh sau khi bo phieu (xem LeafVote.vote)
     val diseaseClass: LeafClass?,  // Neu la benh thi kha nang cao nhat la benh nay
-    val regions: Int,              // So vung da cham diem (ca anh + cac o co la)
+    val regions: Int,              // So la da cham diem
     val healthyClass: LeafClass? = null,  // Lop "khoe" kha nang cao nhat, de biet la cay gi khi la khoe
 )
 // Chu hien len LCD (2 dong la + qua) nam o LcdMessage.kt
 
 /**
- * Model phat hien benh tren la (EfficientNet-B0, 15 lop) chay bang ONNX Runtime.
- *
- * Model duoc train tren anh tung chiec la, con ESP32-CAM chup ca vuon, nen anh lon duoc chia luoi 3x3 o
- * chong lan; o nao it mau la (dat, troi, chau...) thi bo qua. Xac suat benh cua anh = cao nhat trong cac vung.
+ * Phan tich benh la bang 2 model ONNX, giong ai/predict.py:
+ *  1. LeafDetector (YOLO26n) khoanh tung chiec la. Qua, dat, troi... khong phai la nen bi bo,
+ *     khong con bi model benh doan thanh 1 benh nao do.
+ *  2. Cat tung la dua vao model benh (EfficientNet-B0, 15 lop), roi gop bang bo phieu (LeafVote).
  */
 class LeafDiseaseClassifier(
     context: Context,
     modelAsset: String = "leaf_disease_model.onnx",
     labelsAsset: String = "leaf_labels.json",
+    detectorAsset: String = "leaf_detector.onnx",
 ) {
     companion object {
-        // Giong ai/config.py va ai/predict.py: doi o ben do thi doi ca o day
-        const val DISEASE_THRESHOLD = 0.9f    // P(benh) >= 90% -> "Benh"
-        const val SUSPECT_THRESHOLD = 0.6f    // 60-90% -> "Nghi", duoi 60% -> "Khoe"
-        const val TILE_GRID = 3
-        const val TILE_OVERLAP = 0.25         // Moi o rong hon 25% so voi chia deu
-        const val LEAF_MIN_RATIO = 0.15f      // Ca anh it hon 15% mau la -> "Khong thay la"
-        const val TILE_LEAF_MIN_RATIO = 0.5f  // 1 o chi duoc cham diem khi >= 50% la mau la
+        // Giong ai/config.py: doi o ben do thi doi ca o day
+        const val DET_CONF = 0.35f            // Khung la co diem tin cay duoi muc nay thi bo
+        const val LEAF_MIN_SIDE = 32          // La co canh ngan < 32 px thi bo (phong to len 224 chi con mo nhoe)
+        const val MAX_LEAVES = 12             // Chi cham diem toi da 12 la chac chan nhat
         const val DARK_MAX_BRIGHTNESS = 35f   // Do sang trung binh (0-255) duoi muc nay -> anh qua toi
         const val RESIZE_SHORT = 256          // get_transforms(train=False): Resize(256) roi CenterCrop(224)
     }
@@ -56,6 +54,7 @@ class LeafDiseaseClassifier(
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private val session: OrtSession
     private val inputName: String
+    private val detector: LeafDetector
 
     val classes: List<LeafClass>
     private val healthyIdx: List<Int>
@@ -70,6 +69,7 @@ class LeafDiseaseClassifier(
         val modelBytes = context.assets.open(modelAsset).use { it.readBytes() }
         session = env.createSession(modelBytes, OrtSession.SessionOptions())
         inputName = session.inputNames.first()  // "input"
+        detector = LeafDetector(context, detectorAsset)
 
         val json = JSONObject(context.assets.open(labelsAsset).bufferedReader().use { it.readText() })
         size = json.getInt("img_size")
@@ -93,26 +93,30 @@ class LeafDiseaseClassifier(
 
     /** Phan tich 1 anh (anh ca vuon tu ESP32-CAM hoac anh 1 chiec la). */
     fun analyze(image: Bitmap): LeafResult {
-        val (leafRatio, brightness) = colorStats(image)
-        if (brightness < DARK_MAX_BRIGHTNESS) return LeafResult("too_dark", "none", 0f, null, 0)
+        if (brightness(image) < DARK_MAX_BRIGHTNESS) return LeafResult("too_dark", "none", 0f, null, 0)
 
-        // Vung dau tien luon la ca anh, sau do la cac o phan lon la mau la cay
-        val areas = mutableListOf(image)
-        for (tile in makeTiles(image)) {
-            if (colorStats(tile).first >= TILE_LEAF_MIN_RATIO) areas.add(tile)
-        }
-        if (leafRatio < LEAF_MIN_RATIO && areas.size == 1) return LeafResult("no_leaf", "none", 0f, null, 0)
+        // Buoc 1: tim la. Bo la qua nho, giu toi da MAX_LEAVES la chac chan nhat
+        val leaves = detector.detect(image, DET_CONF)
+            .filter { minOf(it.width, it.height) >= LEAF_MIN_SIDE }
+            .take(MAX_LEAVES)
+        if (leaves.isEmpty()) return LeafResult("no_leaf", "none", 0f, null, 0)
 
-        val worst = classify(areas).maxBy { diseaseProbOf(it) }
-        val diseaseProb = diseaseProbOf(worst)
-        val k = diseaseIdx.maxBy { worst[it] }  // Chi xet cac lop benh de biet "neu benh thi la benh gi"
-        val h = healthyIdx.maxBy { worst[it] }  // Chi xet cac lop khoe de biet "neu khoe thi la cay gi"
-        val level = when {
-            diseaseProb >= DISEASE_THRESHOLD -> "diseased"
-            diseaseProb >= SUSPECT_THRESHOLD -> "suspect"
-            else -> "healthy"
-        }
-        return LeafResult("ok", level, diseaseProb, classes[k], areas.size, classes[h])
+        // Buoc 2: cham diem tung la
+        val probs = classify(leaves.map { leaf ->
+            val c = LeafVote.leafCropBox(leaf, image.width, image.height)
+            Bitmap.createBitmap(image, c.x0, c.y0, c.width, c.height)
+        })
+        val diseaseProbs = probs.map { p -> 1f - healthyIdx.sumOf { p[it].toDouble() }.toFloat() }
+
+        // Buoc 3: bo phieu
+        val (level, diseaseProb) = LeafVote.vote(diseaseProbs)
+        // Benh gi: trung binh xac suat cac lop benh cua nhung la bi nghi (khong co la nao bi nghi thi lay ca anh)
+        val voters = diseaseProbs.indices.filter { diseaseProbs[it] >= LeafVote.SUSPECT_THRESHOLD }
+            .ifEmpty { diseaseProbs.indices.toList() }
+        val k = diseaseIdx.maxBy { i -> voters.sumOf { probs[it][i].toDouble() } }
+        // Cay gi (khi khoe): lop "khoe" co trung binh xac suat cao nhat tren moi la
+        val h = healthyIdx.maxBy { i -> probs.sumOf { it[i].toDouble() } }
+        return LeafResult("ok", level, diseaseProb, classes[k], leaves.size, classes[h])
     }
 
     /** Cham diem nhieu vung anh cung luc. Tra ve mang [so vung][15] xac suat (model da co san Softmax). */
@@ -140,45 +144,18 @@ class LeafDiseaseClassifier(
         }
     }
 
-    private fun diseaseProbOf(p: FloatArray): Float = 1f - healthyIdx.sumOf { p[it].toDouble() }.toFloat()
-
-    /** Chia anh thanh luoi 3x3 o chong lan, giong make_tiles() trong predict.py */
-    private fun makeTiles(image: Bitmap): List<Bitmap> {
-        val w = image.width
-        val h = image.height
-        val tw = (w / TILE_GRID.toDouble() * (1 + TILE_OVERLAP)).toInt()
-        val th = (h / TILE_GRID.toDouble() * (1 + TILE_OVERLAP)).toInt()
-        if (minOf(tw, th) < size) return emptyList()  // Anh nho: phong to vung nho chi lam anh mo them
-        val tiles = mutableListOf<Bitmap>()
-        for (row in 0 until TILE_GRID) {
-            for (col in 0 until TILE_GRID) {
-                val x = (col * (w - tw) / (TILE_GRID - 1).toDouble()).roundToInt()
-                val y = (row * (h - th) / (TILE_GRID - 1).toDouble()).roundToInt()
-                tiles.add(Bitmap.createBitmap(image, x, y, tw, th))
-            }
-        }
-        return tiles
-    }
-
-    /** Tra ve (ti le pixel co mau la cay, do sang trung binh 0-255), giong color_stats() trong predict.py */
-    private fun colorStats(image: Bitmap): Pair<Float, Float> {
+    /** Do sang trung binh 0-255 (kenh V cua HSV), giong brightness() trong predict.py */
+    private fun brightness(image: Bitmap): Float {
         val small = smoothScale(image, 64, 64)
         val pixels = IntArray(64 * 64)
         small.getPixels(pixels, 0, 64, 0, 0, 64, 64)
         val hsv = FloatArray(3)
-        var plant = 0
         var vSum = 0
         for (px in pixels) {
-            Color.colorToHSV(px, hsv)  // Android: H 0-360 do, S va V 0-1
-            // Doi ve thang 0-255 cua PIL. Hue 25..130 ~ 35..185 do: tu vang (la benh) den xanh la.
-            // Bo pixel nhat mau (nen xam, troi trang) va pixel qua toi.
-            val h = (hsv[0] / 360f * 255f).toInt()
-            val s = (hsv[1] * 255f).toInt()
-            val v = (hsv[2] * 255f).roundToInt()
-            if (h in 25..130 && s >= 50 && v >= 40) plant++
-            vSum += v
+            Color.colorToHSV(px, hsv)  // Android: V 0-1
+            vSum += (hsv[2] * 255f).roundToInt()
         }
-        return Pair(plant / pixels.size.toFloat(), vSum / pixels.size.toFloat())
+        return vSum / pixels.size.toFloat()
     }
 
     /** Giong get_transforms(train=False): thu canh ngan ve 256 (giu ti le), roi cat giua 224x224. */
@@ -191,19 +168,48 @@ class LeafDiseaseClassifier(
         return Bitmap.createBitmap(resized, (w - size) / 2, (h - size) / 2, size, size)
     }
 
-    /**
-     * Thu nho anh cho muot giong PIL: anh ESP32-CAM 1600x1200 phai thu nho rat manh,
-     * thu 1 phat se bi rang cua lam model doan sai, nen thu tung buoc 1/2 roi moi ve dung kich thuoc.
-     */
-    private fun smoothScale(src: Bitmap, w: Int, h: Int): Bitmap {
-        var bmp = src
-        while (bmp.width / 2 >= w && bmp.height / 2 >= h) {
-            bmp = Bitmap.createScaledBitmap(bmp, bmp.width / 2, bmp.height / 2, true)
-        }
-        return Bitmap.createScaledBitmap(bmp, w, h, true)
-    }
-
     fun close() {
         session.close()
+        detector.close()
+    }
+}
+
+/** Phan tinh toan thuan (khong dung Android) de unit test duoc, giong vote() va leaf_crop_box() trong ai/ */
+object LeafVote {
+    const val DISEASE_THRESHOLD = 0.9f  // P(benh) >= 90% -> "Benh"
+    const val SUSPECT_THRESHOLD = 0.6f  // 60-90% -> "Nghi", duoi 60% -> "Khoe"
+    const val MIN_VOTES = 2             // Can it nhat 2 la cung vuot nguong moi bao "Benh"; 1 la le chi bao "Nghi"
+    const val CROP_PAD = 0.1            // Cat la rong hon khung 10% moi phia
+
+    fun level(prob: Float): String = when {
+        prob >= DISEASE_THRESHOLD -> "diseased"
+        prob >= SUSPECT_THRESHOLD -> "suspect"
+        else -> "healthy"
+    }
+
+    /**
+     * Gop P(benh) cua tung la thanh (muc, P(benh)) cua ca anh. Lay la "benh" thu MIN_VOTES:
+     * no vuot nguong nghia la co it nhat MIN_VOTES la vuot nguong. Anh chi co 1 la thi la do tu quyet.
+     */
+    fun vote(diseaseProbs: List<Float>): Pair<String, Float> {
+        val ranked = diseaseProbs.sortedDescending()
+        val score = ranked[minOf(MIN_VOTES, ranked.size) - 1]
+        val lv = level(score)
+        if (lv == "healthy" && ranked[0] >= DISEASE_THRESHOLD) {
+            return Pair("suspect", ranked[0])  // Chi 1 la benh ro: chua du phieu bao "Benh", nhung nen ra xem cay
+        }
+        return Pair(lv, score)
+    }
+
+    /** Vung cat 1 la: hinh vuong quanh khung (canh = canh dai + 2*10%), day vao trong anh neu la sat mep. */
+    fun leafCropBox(box: LeafBox, w: Int, h: Int): LeafBox {
+        val side = minOf(maxOf(box.width, box.height) * (1 + 2 * CROP_PAD), w.toDouble(), h.toDouble())
+        val cx = ((box.x0 + box.x1) / 2.0).coerceIn(side / 2, w - side / 2)
+        val cy = ((box.y0 + box.y1) / 2.0).coerceIn(side / 2, h - side / 2)
+        // Math.rint = round() cua Python (x.5 ve so chan): vung cat trung tung pixel voi predict.py
+        return LeafBox(
+            Math.rint(cx - side / 2).toInt(), Math.rint(cy - side / 2).toInt(),
+            Math.rint(cx + side / 2).toInt(), Math.rint(cy + side / 2).toInt()
+        )
     }
 }
