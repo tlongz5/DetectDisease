@@ -101,7 +101,7 @@ class DetailActivity : AppCompatActivity() {
         // 2. Dấu hiệu quả
         val isFruitKnown = r.fruitConfidence >= 0.5f && r.fruitLabel != null && r.fruitLabel != "unknown" && !r.fruitNameVi.contains("không rõ", ignoreCase = true)
         val isFruitRotten = isFruitKnown && r.fruitLabel.contains("rotten", ignoreCase = true)
-        val isFruitFresh = isFruitKnown && (r.fruitLabel.contains("fresh", ignoreCase = true) || r.fruitLabel.startsWith("ripe_", ignoreCase = true))
+        val isFruitFresh = isFruitKnown && r.fruitLabel.contains("fresh", ignoreCase = true)
         val isFruitInter = isFruitKnown && r.fruitLabel.contains("intermediate", ignoreCase = true)
 
         when {

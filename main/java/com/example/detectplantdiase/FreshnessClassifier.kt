@@ -92,25 +92,45 @@ class FreshnessClassifier(context: Context, modelAsset: String = "detect_plant_d
             session.run(mapOf("pixel_values" to input)).use  { result ->
                 @Suppress("UNCHECKED_CAST")
                 val logits = (result[0].value as Array<FloatArray>)[0]
-                return pickTomatoPotato(logits)
+                return pickTomato(logits)
             }
         }
     }
 
     companion object {
-        const val CONFIDENCE_THRESHOLD = 0.5f // Tỉ lệ nhỏ hơn 50% => không rõ
+        const val CONFIDENCE_THRESHOLD = 0.5f // Trong 3 nhãn cà chua, nhãn cao nhất dưới 50% => không rõ tươi hay hỏng
+        // Model biết 30 loại nông sản. Tổng xác suất 3 nhãn cà chua (trên cả 30 nhãn) dưới 50% => không thấy quả cà chua.
+        // Thử trên 69 ảnh lá cà chua PlantDoc: chỉ lọc 3 nhãn cà chua thì 34 ảnh bị báo có quả;
+        // thêm ngưỡng này thì chỉ 1 ảnh qua (0.53), mà ảnh đó có quả cà chua xanh thật. Ảnh quả rõ được 0.92.
+        const val MIN_TOMATO_PROB = 0.5f
+        const val NO_TOMATO = "no_tomato"  // Prediction.status khi không thấy quả cà chua
+
+        /** Chỉ xét quả cà chua. Trả về (nhãn cà chua cao nhất, xác suất của nó trong 3 nhãn cà chua, tổng P(cà chua)). */
+        fun tomatoScores(logits: FloatArray, labels: Map<Int, String>): Triple<Int, Float, Float> {
+            val max = logits.max()
+            val exps = FloatArray(logits.size) { exp(logits[it] - max) }
+            val all = exps.sum()
+            val tomato = labels.filterValues { it.startsWith("Tomato_") }.keys
+            val tomatoSum = tomato.sumOf { exps[it].toDouble() }.toFloat()
+            val best = tomato.maxBy { exps[it] }
+            return Triple(best, exps[best] / tomatoSum, tomatoSum / all)
+        }
     }
 
-    private fun pickTomatoPotato(logits: FloatArray): Prediction {
-        val max = logits.max()
-        val exps = FloatArray(logits.size) { exp(logits[it] - max) }
-        val keep = labels.filterValues { it.startsWith("Tomato")
-                || it.startsWith("Potato") || it.startsWith("Bellpepper") }.keys
-        val total = keep.sumOf { exps[it].toDouble() }.toFloat()
-        val best = keep.maxByOrNull { exps[it] }!!
-        val conf = exps[best] / total
+    private fun pickTomato(logits: FloatArray): Prediction {
+        val (best, conf, tomatoProb) = tomatoScores(logits, labels)
         val d = details[best]
 
+        if (tomatoProb < MIN_TOMATO_PROB) {
+            // confidence < 50% nên các màn hình lịch sử tự hiện "Không rõ"
+            return Prediction(
+                label = "unknown",
+                confidence = tomatoProb,
+                fruit = "",
+                status = NO_TOMATO,
+                nameVi = "không rõ (không thấy quả cà chua)"
+            )
+        }
         // Nhận diện quả tỉ lệ nhỏ hơn 50% thì => không rõ
         if (conf < CONFIDENCE_THRESHOLD) {
             return Prediction(

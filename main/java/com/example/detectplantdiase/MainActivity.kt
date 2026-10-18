@@ -133,7 +133,7 @@ class MainActivity : AppCompatActivity() {
     /** Mo ta ket qua model la bang 1 dong, giong describe() trong predict.py */
     private fun describe(r: LeafResult): String = when {
         r.status == "too_dark" -> "ảnh quá tối, không phân tích"
-        r.status == "no_leaf" -> "không thấy lá cây (camera lệch hướng?)"
+        r.status == "no_leaf" -> "không thấy lá cà chua (camera lệch hướng?)"
         r.level == "diseased" -> "CÓ DẤU HIỆU BỆNH ${"%.0f".format(r.diseaseProb * 100)}%: ${r.diseaseClass?.nameVi}"
         r.level == "suspect" -> "NGHI NGỜ ${"%.0f".format(r.diseaseProb * 100)}% (${r.diseaseClass?.nameVi}), nên ra xem cây"
         else -> "khỏe mạnh ${"%.0f".format((1 - r.diseaseProb) * 100)}%"

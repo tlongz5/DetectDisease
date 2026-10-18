@@ -147,7 +147,7 @@ object HistoryManager {
             leaf.status == "too_dark" ->
                 "Ảnh quá tối, độ sáng không đủ để phân tích sắc tố và vết đốm trên lá cây."
             leaf.status == "no_leaf" ->
-                "Không nhận diện được tán lá cây trong khung hình (camera có thể bị lệch hướng hoặc bị che khuất)."
+                "Không nhận diện được lá cà chua trong khung hình (camera có thể bị lệch hướng hoặc bị che khuất)."
             leaf.level == "diseased" ->
                 "Cảnh báo bệnh hại: Tán lá có tổn thương rõ rệt với xác suất nhiễm ${(leaf.diseaseProb * 100).toInt()}%. Chẩn đoán: $nameVi. Các vùng đốm lá bị hoại tử hoặc biến màu bất thường."
             leaf.level == "suspect" ->
@@ -203,23 +203,10 @@ object HistoryManager {
         val symptoms: String
 
         val isRotten = label.contains("rotten", ignoreCase = true)
-        val isFresh = label.contains("fresh", ignoreCase = true) || label.startsWith("ripe_", ignoreCase = true)
+        val isFresh = label.contains("fresh", ignoreCase = true)
         val isInter = label.contains("intermediate", ignoreCase = true)
-        val isUnripe = label.startsWith("unripe_", ignoreCase = true)
 
-        val plantName = when {
-            label.contains("Tomato", ignoreCase = true) -> "Cà chua"
-            label.contains("Pepper", ignoreCase = true) -> "Ớt chuông"
-            label.contains("Potato", ignoreCase = true) -> "Khoai tây"
-            label.contains("Carrot", ignoreCase = true) -> "Cà rốt"
-            label.contains("Cucumber", ignoreCase = true) -> "Dưa chuột"
-            label.contains("apple", ignoreCase = true) -> "Táo"
-            label.contains("banana", ignoreCase = true) -> "Chuối"
-            label.contains("mango", ignoreCase = true) -> "Xoài"
-            label.contains("oranges", ignoreCase = true) -> "Cam"
-            label.contains("strawberry", ignoreCase = true) -> "Dâu tây"
-            else -> "Quả cây"
-        }
+        val plantName = "Cà chua"  // FreshnessClassifier chỉ trả về nhãn cà chua
 
         val baseNameVi = fruit.nameVi.ifEmpty { null }
         when {
@@ -230,10 +217,6 @@ object HistoryManager {
             isInter -> {
                 nameVi = baseNameVi ?: "$plantName - Kém tươi"
                 symptoms = "Quả có dấu hiệu giảm độ ẩm và kém tươi (Độ tin cậy: $pct%). Nên thu hoạch hoặc sử dụng sớm."
-            }
-            isUnripe -> {
-                nameVi = baseNameVi ?: "$plantName - Quả còn xanh"
-                symptoms = "Quả đang phát triển, còn xanh chưa chín (Độ tin cậy: $pct%). Tiếp tục chăm sóc chờ kỳ thu hoạch."
             }
             isFresh -> {
                 nameVi = baseNameVi ?: "$plantName - Tươi tốt"

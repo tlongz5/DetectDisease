@@ -44,7 +44,7 @@ class LeafDiseaseClassifier(
 ) {
     companion object {
         // Giong ai/config.py: doi o ben do thi doi ca o day
-        const val DET_CONF = 0.35f            // Khung la co diem tin cay duoi muc nay thi bo
+        const val DET_CONF = 0.25f            // Khung la ca chua co diem tin cay duoi muc nay thi bo
         const val LEAF_MIN_SIDE = 32          // La co canh ngan < 32 px thi bo (phong to len 224 chi con mo nhoe)
         const val MAX_LEAVES = 12             // Chi cham diem toi da 12 la chac chan nhat
         const val DARK_MAX_BRIGHTNESS = 35f   // Do sang trung binh (0-255) duoi muc nay -> anh qua toi

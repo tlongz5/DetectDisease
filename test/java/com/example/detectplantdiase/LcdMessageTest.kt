@@ -12,13 +12,13 @@ class LcdMessageTest {
 
     private val tomatoHealthy = cls("Tomato_healthy", "Ca chua khoe", healthy = true)
     private val tomatoLateBlight = cls("Tomato_Late_blight", "Moc suong")
-    private val potatoLateBlight = cls("Potato_Late_blight", "Moc suong")
-    private val pepperBacterialSpot = cls("Pepper_Bacterial_spot", "Dom vi khuan")
+    private val tomatoBacterialSpot = cls("Tomato_Bacterial_spot", "Dom vi khuan")
 
     private fun leaf(level: String, diseaseProb: Float, disease: LeafClass?, healthy: LeafClass?) =
         LeafResult("ok", level, diseaseProb, disease, 10, healthy)
 
-    private fun fruit(label: String, conf: Float, nameVi: String = label) = Prediction(label, conf, nameVi = nameVi)
+    private fun fruit(label: String, conf: Float, nameVi: String = label, status: String = "") =
+        Prediction(label, conf, status = status, nameVi = nameVi)
 
     @Test
     fun healthyLeaf_freshFruit() {
@@ -31,21 +31,27 @@ class LcdMessageTest {
     }
 
     @Test
-    fun diseasedLeaf_namesPlantOfThatDisease() {
-        // La khoe kha nang nhat la ca chua, nhung benh la cua khoai tay: dong LCD phai noi khoai tay
-        val m = LcdMessage.from(leaf("diseased", 0.976f, potatoLateBlight, tomatoHealthy), fruit("Potato_rotten", 0.955f))
-        assertEquals("La khoai tay: Moc suong 97%", m.leafLine)
-        assertEquals("Cu khoai tay: Thoi hong 95%", m.fruitLine)
+    fun diseasedLeaf_rottenFruit() {
+        val m = LcdMessage.from(leaf("diseased", 0.976f, tomatoLateBlight, tomatoHealthy), fruit("Tomato_rotten", 0.955f))
+        assertEquals("La ca chua: Moc suong 97%", m.leafLine)
+        assertEquals("Qua ca chua: Thoi hong 95%", m.fruitLine)
         assertEquals(LcdMessage.MIST_STOP, m.mistMode)
     }
 
     @Test
     fun suspectLeaf_longestLineStillFits() {
-        val m = LcdMessage.from(leaf("suspect", 0.75f, pepperBacterialSpot, tomatoHealthy),
-            fruit("Bellpepper_intermediate_fresh", 0.8f))
-        assertEquals("La ot chuong: Nghi Dom vi khuan 75%", m.leafLine)
-        assertEquals("Qua ot chuong: Kem tuoi 80%", m.fruitLine)
+        val m = LcdMessage.from(leaf("suspect", 0.75f, tomatoBacterialSpot, tomatoHealthy),
+            fruit("Tomato_intermediate_fresh", 0.8f))
+        assertEquals("La ca chua: Nghi Dom vi khuan 75%", m.leafLine)
+        assertEquals("Qua ca chua: Kem tuoi 80%", m.fruitLine)
         assertEquals(LcdMessage.MIST_STOP, m.mistMode)
+    }
+
+    @Test
+    fun noTomatoFruit() {
+        val m = LcdMessage.from(leaf("healthy", 0.1f, tomatoLateBlight, tomatoHealthy),
+            fruit("unknown", 0.07f, status = FreshnessClassifier.NO_TOMATO))
+        assertEquals("Khong thay qua ca chua", m.fruitLine)
     }
 
     @Test
@@ -67,7 +73,7 @@ class LcdMessageTest {
     @Test
     fun noLeaf_fruitStillShown() {
         val m = LcdMessage.from(LeafResult("no_leaf", "none", 0f, null, 1), fruit("Tomato_rotten", 0.88f))
-        assertEquals("Khong thay la", m.leafLine)
+        assertEquals("Khong thay la ca chua", m.leafLine)
         assertEquals("Qua ca chua: Thoi hong 88%", m.fruitLine)
     }
 
@@ -87,8 +93,8 @@ class LcdMessageTest {
 
     @Test
     fun unmappedFruitLabel_fallsBackToAsciiName() {
-        val m = LcdMessage.from(null, fruit("Carrot_fresh", 0.9f, nameVi = "Cà rốt tươi đẹp"))
-        assertEquals("Ca rot tuoi dep 90%", m.fruitLine)
+        val m = LcdMessage.from(null, fruit("Tomato_overripe", 0.9f, nameVi = "Cà chua chín nẫu"))
+        assertEquals("Ca chua chin nau 90%", m.fruitLine)
     }
 
     @Test
@@ -120,33 +126,33 @@ class LcdMessageTest {
         val json = File("main/assets/leaf_labels.json").readText()
         val found = Regex("\"id\":\\s*\"([^\"]+)\"[^}]*?\"lcd_vi\":\\s*\"([^\"]+)\"[^}]*?\"is_healthy\":\\s*(true|false)")
             .findAll(json).map { cls(it.groupValues[1], it.groupValues[2], it.groupValues[3] == "true") }.toList()
-        assertEquals(15, found.size)
+        assertEquals(10, found.size)
+        assertTrue("Con lop khong phai ca chua", found.all { it.id.startsWith("Tomato_") })
         val healthy = found.filter { it.healthy }
         for (d in found.filter { !it.healthy }) {
             for ((level, p) in listOf("suspect" to 0.899f, "diseased" to 0.999f)) {
                 val line = LcdMessage.from(leaf(level, p, d, healthy.first()), null).leafLine
                 checkLine(line)
-                assertTrue("Thieu ten cay: $line", !line.startsWith("La:"))
+                assertTrue("Thieu ten cay: $line", line.startsWith("La ca chua: "))
             }
         }
         for (h in healthy) {
             val line = LcdMessage.from(leaf("healthy", 0f, found.first { !it.healthy }, h), null).leafLine
             checkLine(line)
-            assertTrue("Sai dinh dang: $line", Regex("La [a-z ]+: Khoe 100%").matches(line))
+            assertEquals("La ca chua: Khoe 100%", line)
         }
     }
 
-    /** Moi nhan ca chua / khoai tay / ot chuong ma model qua co the tra ve deu co ten tieng Viet */
+    /** Moi nhan ca chua ma model qua co the tra ve deu co ten tieng Viet */
     @Test
     fun everyFruitLabel_fitsAndIsMapped() {
         val json = File("main/assets/labels.json").readText()
-        val labels = Regex("\"((?:Tomato|Potato|Bellpepper)_[a-z_]+)\"").findAll(json).map { it.groupValues[1] }.toSet()
-        assertEquals(9, labels.size)
+        val labels = Regex("\"(Tomato_[a-z_]+)\"").findAll(json).map { it.groupValues[1] }.toSet()
+        assertEquals(3, labels.size)
         for (label in labels) {
             val line = LcdMessage.from(null, fruit(label, 1f)).fruitLine
             checkLine(line)
-            assertTrue("Chua co ten tieng Viet: $line",
-                Regex("(Qua ca chua|Qua ot chuong|Cu khoai tay): (Tuoi|Kem tuoi|Thoi hong) 100%").matches(line))
+            assertTrue("Chua co ten tieng Viet: $line", Regex("Qua ca chua: (Tuoi|Kem tuoi|Thoi hong) 100%").matches(line))
         }
     }
 

@@ -5,7 +5,7 @@ import java.text.Normalizer
 
 /**
  * Ket qua AI gui cho ESP32-CAM (POST /result) de Nano hien len LCD 1602 trong 20 giay:
- * dong 1 = tinh trang la, dong 2 = tinh trang qua, ca 2 dong deu ghi ro la cay gi. Vd:
+ * dong 1 = tinh trang la, dong 2 = tinh trang qua. Ca 2 model chi dung cho ca chua. Vd:
  *   "La ca chua: Moc suong 97%"
  *   "Qua ca chua: Tuoi 92%"
  * LCD khong hien duoc dau tieng Viet nen chi dung ky tu ASCII. Dong dai hon 16 ky tu thi Nano cho chay chu.
@@ -64,19 +64,9 @@ data class LcdMessage(val leafLine: String, val fruitLine: String, val mistMode:
         // Benh virus lay qua con trung / tiep xuc, do am la khong lam benh nang them
         private val VIRUS = setOf("Tomato_Mosaic", "Tomato_Yellow_Curl")
 
-        // Ten cay theo phan dau id lop cua model la (leaf_labels.json), vd "Tomato_Late_blight" -> "ca chua"
-        private val LEAF_PLANT = mapOf(
-            "Tomato" to "ca chua",
-            "Potato" to "khoai tay",
-            "Pepper" to "ot chuong",  // PlantVillage "Pepper,_bell" la ot chuong
-        )
-
-        // Nhan cua model qua (labels.json) dang "<Loai>_<tinh trang>", vd "Tomato_intermediate_fresh"
-        private val FRUIT_PART = mapOf(
-            "Tomato" to "Qua ca chua",
-            "Bellpepper" to "Qua ot chuong",
-            "Potato" to "Cu khoai tay",  // Khoai tay la cu, khong phai qua
-        )
+        // Model la chi con 10 lop ca chua; model qua chi lay 3 nhan "Tomato_<tinh trang>"
+        private const val LEAF_HEAD = "La ca chua"
+        private const val FRUIT_HEAD = "Qua ca chua"
         private val FRUIT_STATE = mapOf(
             "fresh" to "Tuoi",
             "intermediate_fresh" to "Kem tuoi",
@@ -103,17 +93,13 @@ data class LcdMessage(val leafLine: String, val fruitLine: String, val mistMode:
         private fun leafLine(r: LeafResult?): String {
             if (r == null) return "Thieu model la"
             if (r.status == "too_dark") return "Anh qua toi"
-            if (r.status == "no_leaf") return "Khong thay la"
+            if (r.status == "no_leaf") return "Khong thay la ca chua"
 
-            // Ten cay lay theo dung lop dang noi toi: la benh gi thi la benh cua cay do
-            val cls = if (r.level == "healthy") r.healthyClass else r.diseaseClass
-            val plant = cls?.id?.substringBefore('_')?.let { LEAF_PLANT[it] }
-            val head = if (plant != null) "La $plant" else "La"
             // Lam tron xuong giong predict.py: 89.7% (muc "Nghi") hien "89%", khong thanh "90%" de gay nham
             return when (r.level) {
-                "diseased" -> "$head: ${r.diseaseClass?.lcdVi ?: "Benh"} ${pct(r.diseaseProb, 99)}%"
-                "suspect" -> "$head: Nghi ${r.diseaseClass?.lcdVi ?: "benh"} ${pct(r.diseaseProb, 99)}%"
-                else -> "$head: Khoe ${pct(1 - r.diseaseProb, 100)}%"
+                "diseased" -> "$LEAF_HEAD: ${r.diseaseClass?.lcdVi ?: "Benh"} ${pct(r.diseaseProb, 99)}%"
+                "suspect" -> "$LEAF_HEAD: Nghi ${r.diseaseClass?.lcdVi ?: "benh"} ${pct(r.diseaseProb, 99)}%"
+                else -> "$LEAF_HEAD: Khoe ${pct(1 - r.diseaseProb, 100)}%"
             }
         }
 
@@ -121,12 +107,12 @@ data class LcdMessage(val leafLine: String, val fruitLine: String, val mistMode:
             if (f == null) return "Thieu model qua"
             // Anh qua toi thi model qua cung chi doan bua
             if (leaf?.status == "too_dark") return "Khong ro qua"
+            if (f.status == FreshnessClassifier.NO_TOMATO) return "Khong thay qua ca chua"
             if (f.label == "unknown" || f.confidence < FreshnessClassifier.CONFIDENCE_THRESHOLD) return "Khong ro qua"
 
-            val part = FRUIT_PART[f.label.substringBefore('_')]
-            val state = FRUIT_STATE[f.label.substringAfter('_')]
+            val state = FRUIT_STATE[f.label.removePrefix("Tomato_")]
             val p = pct(f.confidence, 100)
-            return if (part != null && state != null) "$part: $state $p%" else "${f.nameVi} $p%"
+            return if (f.label.startsWith("Tomato_") && state != null) "$FRUIT_HEAD: $state $p%" else "${f.nameVi} $p%"
         }
 
         private fun pct(prob: Float, max: Int): Int = (prob * 100).toInt().coerceIn(1, max)

@@ -19,11 +19,16 @@ data class LeafBox(val x0: Int, val y0: Int, val x1: Int, val y1: Int, val score
 }
 
 /**
- * Model YOLO26n tim tung chiec la trong anh (ai/train_detector.py -> leaf_detector.onnx), giong ai/detector.py.
+ * Model YOLO26n tim tung chiec la ca chua trong anh (ai/train_detector.py -> leaf_detector.onnx), giong ai/detector.py.
  * Vao [1,3,640,640] RGB 0..1, anh thu nho giu ti le roi dat giua o vuong to xam (114).
- * Ra [1,300,6] = x0,y0,x1,y1 (tren o 640x640), diem, lop. YOLO26 tu loc khung trung nen khong can NMS.
+ * Ra [1,300,6] = x0,y0,x1,y1 (tren o 640x640), diem, lop (0 = la ca chua, 1 = la cay khac).
+ * YOLO26 tu loc khung trung nen khong can NMS. Chi tra ve la ca chua, la cay khac bi bo.
  */
 class LeafDetector(context: Context, modelAsset: String = "leaf_detector.onnx") {
+    companion object {
+        const val TOMATO_CLASS = 0  // Lop "la ca chua", giong TOMATO_CLASS trong ai/detector.py
+    }
+
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private val session: OrtSession
     private val inputName: String
@@ -36,7 +41,7 @@ class LeafDetector(context: Context, modelAsset: String = "leaf_detector.onnx") 
         size = 640
     }
 
-    /** Tra ve cac la co diem >= conf, diem cao truoc. */
+    /** Tra ve cac la ca chua co diem >= conf, diem cao truoc. */
     fun detect(image: Bitmap, conf: Float): List<LeafBox> {
         val w = image.width
         val h = image.height
@@ -71,7 +76,7 @@ class LeafDetector(context: Context, modelAsset: String = "leaf_detector.onnx") 
         }
         val leaves = mutableListOf<LeafBox>()
         for (r in rows) {
-            if (r[4] < conf) continue
+            if (r[4] < conf || r[5].toInt() != TOMATO_CLASS) continue
             // Doi ve toa do anh goc
             val box = LeafBox(
                 ((r[0] - px) / scale).roundToInt().coerceAtLeast(0),
