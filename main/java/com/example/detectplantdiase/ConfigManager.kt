@@ -155,10 +155,10 @@ object ConfigManager {
     }
 
     /**
-     * URL API chụp ảnh có bật đèn Flash: /capture?flash=1
+     * URL API chụp ảnh, không bật đèn flash. Muốn bật flash (trong nhà, thiếu sáng) thì thêm "?flash=1".
      */
     fun getCaptureUrl(context: Context): String {
-        return "${getBaseUrl(context)}/capture?flash=1"
+        return "${getBaseUrl(context)}/capture"
     }
 
     /**
