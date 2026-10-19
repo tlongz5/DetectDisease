@@ -1,147 +1,86 @@
 package com.example.detectplantdiase
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
-import android.net.Uri
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.ImageView
-import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
+import com.example.detectplantdiase.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+/**
+ * Man goc cua app: trang Trang chu / Lich su + nut Camera o giua thanh duoi.
+ * Cai dat, Camera, Ket qua deu mo chong len man nay, nen bam quay lai luon ve day thay vi thoat app.
+ */
 class MainActivity : AppCompatActivity() {
 
-    // 2 model chay song song tren cung 1 anh: model la (benh tren la) va model qua (do tuoi cua qua).
-    // Thieu file model nao thi model do = null, app van chay phan con lai.
-    private var leafModel: LeafDiseaseClassifier? = null
-    private var fruitModel: FreshnessClassifier? = null
-    @Volatile private var modelsLoaded = false
+    companion object {
+        private const val TAG_HOME = "home"
+        private const val TAG_HISTORY = "history"
+    }
 
-    private lateinit var imageView: ImageView
-    private lateinit var tvResult: TextView
+    private lateinit var binding: ActivityMainBinding
 
-    private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { classify(sendToEsp = false) { loadBitmap(it) } }
+    // Dang o trang Lich su: bam quay lai thi ve Trang chu, o Trang chu bam quay lai moi thoat app
+    private val backToHome = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            binding.bottomNav.selectedItemId = R.id.nav_home
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setupEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        imageView = findViewById(R.id.imageView)
-        tvResult = findViewById(R.id.tvResult)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        tvResult.text = "Đang tải model..."
-        lifecycleScope.launch(Dispatchers.Default) {
-            val status = StringBuilder()
-            leafModel = try {
-                LeafDiseaseClassifier(this@MainActivity)
-            } catch (e: Exception) {
-                status.appendLine("Model lá: lỗi (${e.message})")
-                null
+        // Nap model AI ngay khi mo app, de luc chup xong khong phai cho nap model qua 343 MB
+        lifecycleScope.launch { AiEngine.load(applicationContext) }
+
+        // Nguoi dung dang bat tu dong chup nhung service da bi dung (Android dong app, khong cho chay luc
+        // khoi dong may...): mo app thi chay lai
+        if (savedInstanceState == null && ConfigManager.isMonitoringEnabled(this) && !GardenMonitorService.isServiceRunning) {
+            GardenMonitorService.startMonitoring(this)
+        }
+
+        if (savedInstanceState == null) {
+            val history = HistoryFragment()
+            supportFragmentManager.beginTransaction()
+                .add(R.id.fragmentContainer, HomeFragment(), TAG_HOME)
+                .add(R.id.fragmentContainer, history, TAG_HISTORY)
+                .hide(history)
+                .commitNow()
+        }
+
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_home -> showTab(TAG_HOME)
+                R.id.nav_history -> showTab(TAG_HISTORY)
+                else -> return@setOnItemSelectedListener false
             }
-            fruitModel = try {
-                FreshnessClassifier(this@MainActivity)
-            } catch (e: Exception) {
-                status.appendLine("Model quả: chưa có file detect_plant_disease.onnx trong assets")
-                null
-            }
-            modelsLoaded = true
-            withContext(Dispatchers.Main) { tvResult.text = status.append("Sẵn sàng").toString() }
+            true
+        }
+        binding.fabCamera.setOnClickListener {
+            startActivity(Intent(this, CameraActivity::class.java))
         }
 
-        findViewById<Button>(R.id.btnPick).setOnClickListener { pickImage.launch("image/*") }
-        // Anh tu ESP32-CAM: phan tich xong thi gui ket qua nguoc ve ESP32-CAM de chuyen xuong Nano
-        findViewById<Button>(R.id.btnEsp).setOnClickListener { classify(sendToEsp = true) { fetchEspImage() } }
+        onBackPressedDispatcher.addCallback(this, backToHome)
+        backToHome.isEnabled = supportFragmentManager.findFragmentByTag(TAG_HISTORY)?.isHidden == false
     }
 
-    private fun loadBitmap(uri: Uri): Bitmap {
-        val src = ImageDecoder.createSource(contentResolver, uri)
-        return ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
-            val maxDim = 800
-            val width = info.size.width
-            val height = info.size.height
-            if (width > maxDim || height > maxDim) {
-                val scale = maxOf(width, height) / maxDim
-                decoder.setTargetSampleSize(scale)
-            }
-            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-        }
+    fun openHistoryTab() {
+        binding.bottomNav.selectedItemId = R.id.nav_history
     }
 
-    /** Tai 1 anh JPEG tu ESP32-CAM. Co gioi han thoi gian de app khong bi treo khi ESP32-CAM mat mang. */
-    private fun fetchEspImage(): Bitmap {
-        // Dia chi ESP lay tu man hinh cai dat (ConfigManager), vao WiFi TuoiCay-CAM thi tu dung 192.168.4.1
-        val conn = ConfigManager.openEsp(this, "${ConfigManager.getBaseUrl(this)}/capture")
-        conn.connectTimeout = 5000
-        conn.readTimeout = 20000
-        try {
-            return conn.inputStream.use { BitmapFactory.decodeStream(it) }
-                ?: throw IllegalStateException("ESP32-CAM không trả về ảnh")
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    private fun classify(sendToEsp: Boolean, getBitmap: () -> Bitmap) {
-        if (!modelsLoaded) {
-            tvResult.text = "Model chưa tải xong, thử lại sau vài giây"
-            return
-        }
-        val leaf = leafModel
-        val fruit = fruitModel
-        if (leaf == null && fruit == null) {
-            tvResult.text = "Không có model nào dùng được"
-            return
-        }
-        tvResult.text = "Đang phân tích..."
-        lifecycleScope.launch(Dispatchers.Default) {
-            try {
-                val bmp = getBitmap()
-                val t0 = System.currentTimeMillis()
-                val leafResult = leaf?.analyze(bmp)
-                val fruitResult = fruit?.predict(bmp)
-                val ms = System.currentTimeMillis() - t0
-                // LCD 1602 cua Nano: dong 1 = la, dong 2 = qua. Anh chon tu thu vien thi chi xem truoc, khong gui
-                val lcd = LcdMessage.from(leafResult, fruitResult)
-                val sent = if (sendToEsp) lcd.sendTo(this@MainActivity, ConfigManager.getBaseUrl(this@MainActivity)) else null
-
-                val text = buildString {
-                    appendLine("LÁ: " + (leafResult?.let { describe(it) } ?: "chưa có model"))
-                    appendLine("QUẢ: " + (fruitResult?.let { "${it.label} (${"%.0f".format(it.confidence * 100)}%)" }
-                        ?: "chưa có model"))
-                    appendLine("LCD dòng 1: ${lcd.leafLine}")
-                    appendLine("LCD dòng 2: ${lcd.fruitLine}")
-                    if (sent != null) appendLine("ESP32-CAM: $sent")
-                    append("(${ms} ms)")
-                }
-                withContext(Dispatchers.Main) {
-                    imageView.setImageBitmap(bmp)
-                    tvResult.text = text
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { tvResult.text = "Lỗi: ${e.message}" }
-            }
-        }
-    }
-
-    /** Mo ta ket qua model la bang 1 dong, giong describe() trong predict.py */
-    private fun describe(r: LeafResult): String = when {
-        r.status == "too_dark" -> "ảnh quá tối, không phân tích"
-        r.status == "no_leaf" -> "không thấy lá cà chua (camera lệch hướng?)"
-        r.level == "diseased" -> "CÓ DẤU HIỆU BỆNH ${"%.0f".format(r.diseaseProb * 100)}%: ${r.diseaseClass?.nameVi}"
-        r.level == "suspect" -> "NGHI NGỜ ${"%.0f".format(r.diseaseProb * 100)}% (${r.diseaseClass?.nameVi}), nên ra xem cây"
-        else -> "khỏe mạnh ${"%.0f".format((1 - r.diseaseProb) * 100)}%"
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        leafModel?.close()
-        fruitModel?.close()
+    private fun showTab(tag: String) {
+        val home = supportFragmentManager.findFragmentByTag(TAG_HOME) ?: return
+        val history = supportFragmentManager.findFragmentByTag(TAG_HISTORY) ?: return
+        val showHome = tag == TAG_HOME
+        supportFragmentManager.beginTransaction()
+            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
+            .show(if (showHome) home else history)
+            .hide(if (showHome) history else home)
+            .commit()
+        backToHome.isEnabled = !showHome
     }
 }

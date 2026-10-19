@@ -18,13 +18,15 @@ object ConfigManager {
     private const val KEY_INTERVAL = "interval"
     private const val KEY_TIME_UNIT = "time_unit"
     private const val KEY_CAPTURE_MODE = "capture_mode"
+    private const val KEY_MONITORING = "monitoring_enabled"
 
-    // 4 Chế độ chụp (Modes)
-    const val MODE_INSTANT = "MODE_INSTANT"       // Mode 1: Chụp ngay lập tức (không cần đợi)
-    const val MODE_1_MINUTE = "MODE_1_MINUTE"     // Mode 2: Sau 1 phút (chu kỳ 1 phút)
-    const val MODE_1_HOUR = "MODE_1_HOUR"         // Mode 3: Sau 1 giờ (chu kỳ 1 giờ)
-    const val MODE_1_DAY = "MODE_1_DAY"           // Mode 4: Sau 1 ngày (chu kỳ 1 ngày)
-    const val MODE_CUSTOM = "MODE_CUSTOM"         // Mode tùy chỉnh khác
+    // Chu kỳ tự động chụp. "Chụp ngay" giờ là nút riêng trên Trang chủ, không còn là 1 chế độ
+    const val MODE_30_SECONDS = "MODE_30_SECONDS" // Mỗi 30 giây (theo dõi sát)
+    const val MODE_1_MINUTE = "MODE_1_MINUTE"     // Mỗi 1 phút (test nhanh)
+    const val MODE_1_HOUR = "MODE_1_HOUR"         // Mỗi 1 giờ (chuẩn)
+    const val MODE_1_DAY = "MODE_1_DAY"           // Mỗi 1 ngày
+    const val MODE_CUSTOM = "MODE_CUSTOM"         // Tùy chỉnh khác
+    private const val LEGACY_MODE_INSTANT = "MODE_INSTANT"  // Bản cũ lưu chế độ này: coi như chế độ mặc định
 
     const val UNIT_MINUTES = "MINUTES"
     const val UNIT_HOURS = "HOURS"
@@ -37,7 +39,7 @@ object ConfigManager {
     private const val ESP_AP_PREFIX = "192.168.4."
     const val DEFAULT_START_DELAY = 0f
     const val DEFAULT_INTERVAL = 1f
-    const val DEFAULT_MODE = MODE_INSTANT
+    const val DEFAULT_MODE = MODE_1_HOUR
 
     private fun getPrefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -66,7 +68,21 @@ object ConfigManager {
     }
 
     fun getMode(context: Context): String {
-        return getPrefs(context).getString(KEY_CAPTURE_MODE, DEFAULT_MODE) ?: DEFAULT_MODE
+        val mode = getPrefs(context).getString(KEY_CAPTURE_MODE, DEFAULT_MODE) ?: DEFAULT_MODE
+        return if (mode == LEGACY_MODE_INSTANT) DEFAULT_MODE else mode
+    }
+
+    /** Đổi nhanh chu kỳ (các chip trên Trang chủ), giữ nguyên IP và số phút/giờ tùy chỉnh */
+    fun setMode(context: Context, mode: String) {
+        getPrefs(context).edit().putString(KEY_CAPTURE_MODE, mode).apply()
+    }
+
+    /** Người dùng đang bật tự động chụp: khởi động lại máy thì BootReceiver bật lại */
+    fun isMonitoringEnabled(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_MONITORING, false)
+
+    fun setMonitoringEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_MONITORING, enabled).apply()
     }
 
     fun getStartDelay(context: Context): Float {
@@ -91,16 +107,16 @@ object ConfigManager {
 
     fun getModeDisplayName(context: Context): String {
         return when (getMode(context)) {
-            MODE_INSTANT -> "⚡ Chụp ngay lập tức"
-            MODE_1_MINUTE -> "⏱️ Sau mỗi 1 phút"
-            MODE_1_HOUR -> "🕒 Sau mỗi 1 giờ"
-            MODE_1_DAY -> "📅 Sau mỗi 1 ngày"
+            MODE_30_SECONDS -> "Mỗi 30 giây"
+            MODE_1_MINUTE -> "Mỗi 1 phút"
+            MODE_1_HOUR -> "Mỗi 1 giờ"
+            MODE_1_DAY -> "Mỗi 1 ngày"
             else -> {
                 val interval = getInterval(context)
                 val unit = getTimeUnit(context)
                 val unitName = getUnitDisplayName(unit)
                 val numStr = if (interval % 1.0f == 0f) interval.toInt().toString() else interval.toString()
-                "⚙️ Tùy chỉnh: $numStr $unitName"
+                "Mỗi $numStr $unitName"
             }
         }
     }
@@ -165,7 +181,6 @@ object ConfigManager {
      * Quy đổi thời gian trễ bắt đầu sang mili-giây
      */
     fun startDelayToMillis(context: Context): Long {
-        if (getMode(context) == MODE_INSTANT) return 0L
         val delay = getStartDelay(context)
         val unit = getTimeUnit(context)
         return when (unit) {
@@ -180,7 +195,7 @@ object ConfigManager {
      */
     fun intervalToMillis(context: Context): Long {
         return when (getMode(context)) {
-            MODE_INSTANT -> 0L // Không lặp định kỳ, chỉ chụp ngay
+            MODE_30_SECONDS -> 30 * 1000L
             MODE_1_MINUTE -> 60 * 1000L
             MODE_1_HOUR -> 3600 * 1000L
             MODE_1_DAY -> 24 * 3600 * 1000L

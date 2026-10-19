@@ -1,140 +1,113 @@
 package com.example.detectplantdiase
 
+import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.example.detectplantdiase.databinding.ActivityDetailBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
+/** Man Ket qua phan tich cua 1 lan chup. Bam quay lai ve man truoc (Trang chu / Lich su) */
 class DetailActivity : AppCompatActivity() {
+
+    companion object {
+        const val EXTRA_RECORD_ID = "extra_record_id"
+
+        fun open(context: Context, recordId: String) {
+            context.startActivity(Intent(context, DetailActivity::class.java).putExtra(EXTRA_RECORD_ID, recordId))
+        }
+    }
 
     private lateinit var binding: ActivityDetailBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setupEdgeToEdge()
         super.onCreate(savedInstanceState)
-        hideSystemBars()
         binding = ActivityDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.toolbar.applySystemBarPadding(top = true)
+        binding.scrollDetail.applySystemBarPadding(bottom = true)
+        binding.toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
-        binding.toolbar.setNavigationOnClickListener {
-            finish()
-        }
-
-        val recordId = intent.getStringExtra(EXTRA_RECORD_ID)
-        val record = if (recordId != null) {
-            HistoryManager.getRecordById(this, recordId)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getSerializableExtra(EXTRA_RECORD) as? DetectionRecord
-        }
-
+        val record = intent.getStringExtra(EXTRA_RECORD_ID)?.let { HistoryManager.getRecordById(this, it) }
         if (record == null) {
             finish()
             return
         }
-
         bindData(record)
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemBars()
-        }
-    }
+    private fun color(res: Int) = ContextCompat.getColor(this, res)
 
     private fun bindData(r: DetectionRecord) {
-        // 1. Ảnh và thông tin cơ bản
-        val bitmap = HistoryManager.loadBitmapFromFile(r.imagePath)
-        if (bitmap != null) {
-            binding.imgDetail.setImageBitmap(bitmap)
-        } else {
-            binding.imgDetail.setImageResource(android.R.drawable.ic_menu_gallery)
+        lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) { HistoryManager.loadBitmapFromFile(r.imagePath) }
+            if (bitmap != null) binding.imgDetail.setImageBitmap(bitmap) else binding.imgDetail.setImageResource(R.drawable.ic_image)
         }
 
-        binding.tvDetailTime.text = "🕒 ${HistoryManager.formatTime(r.timestamp)}"
-        binding.tvDetailSource.text = r.source
+        // 1. Tong ket
+        val overall = overallStyle(r.overallStatus)
+        binding.cardOverall.setCardBackgroundColor(color(overall.container))
+        binding.imgOverallIcon.setImageResource(overall.icon)
+        binding.imgOverallIcon.imageTintList = ColorStateList.valueOf(color(overall.color))
+        binding.tvOverallLabel.text = overall.label
+        binding.tvOverallLabel.setTextColor(color(overall.color))
+        binding.tvOverallTitle.text = r.displayTitle
+        binding.tvOverallSummary.text = r.overallSummary
 
-        val dangerColor = ContextCompat.getColor(this, R.color.color_danger)
-        val warningColor = ContextCompat.getColor(this, R.color.color_warning)
-        val healthyColor = ContextCompat.getColor(this, R.color.color_healthy)
+        binding.chipTime.text = HistoryManager.formatTime(r.timestamp)
+        binding.chipSource.text = r.source
+        binding.chipInference.text = "AI ${String.format(Locale.forLanguageTag("vi"), "%.1f", r.inferenceTimeMs / 1000f)} giây"
 
-        // 1. Dấu hiệu lá
-        when (r.leafLevel) {
-            "diseased" -> {
-                binding.tvLeafLevelBadge.text = "NHIỄM BỆNH"
-                binding.tvLeafLevelBadge.backgroundTintList = ColorStateList.valueOf(dangerColor)
-            }
-            "suspect" -> {
-                binding.tvLeafLevelBadge.text = "NGHI NGỜ"
-                binding.tvLeafLevelBadge.backgroundTintList = ColorStateList.valueOf(warningColor)
-            }
-            "healthy" -> {
-                binding.tvLeafLevelBadge.text = "KHỎE MẠNH"
-                binding.tvLeafLevelBadge.backgroundTintList = ColorStateList.valueOf(healthyColor)
-            }
-            else -> {
-                binding.tvLeafLevelBadge.text = "KHÔNG RÕ"
-                binding.tvLeafLevelBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#757575"))
+        // 2. La
+        val leaf = leafStyle(r.leafLevel)
+        binding.tvLeafBadge.applyBadge(leaf)
+        val code = if (!r.leafDiseaseCode.isNullOrBlank()) " (${r.leafDiseaseCode})" else ""
+        // Model luon tra ve "benh kha nang cao nhat" ke ca khi la khoe: chi hien ten benh khi bi benh / nghi benh
+        binding.tvLeafDiagnosis.text = when (r.leafLevel) {
+            "diseased", "suspect" -> (r.leafDiseaseNameVi ?: "Bệnh lá") + code
+            "healthy" -> "Lá cà chua khỏe mạnh"
+            else -> when (r.leafStatus) {
+                "too_dark" -> "Ảnh quá tối"
+                "no_leaf" -> "Không nhận diện được lá cà chua"
+                else -> "Chưa phân tích được lá"
             }
         }
-
-        val leafTitle = r.leafDiseaseNameVi ?: when (r.leafStatus) {
-            "too_dark" -> "Ảnh quá tối"
-            "no_leaf" -> "Không nhận diện được lá cây"
-            else -> "Lá cây phát triển bình thường"
+        val leafPct = when (r.leafLevel) {
+            "diseased", "suspect" -> (r.leafDiseaseProb * 100).toInt()
+            "healthy" -> ((1 - r.leafDiseaseProb) * 100).toInt()
+            else -> null
         }
-        val codeSuffix = if (!r.leafDiseaseCode.isNullOrBlank()) " (${r.leafDiseaseCode})" else ""
-        binding.tvLeafDiagnosis.text = leafTitle + codeSuffix
-
-        val leafProbText = if (r.leafLevel == "diseased" || r.leafLevel == "suspect") {
-            "Xác suất nhiễm bệnh: ${(r.leafDiseaseProb * 100).toInt()}%"
-        } else if (r.leafLevel == "healthy") {
-            "Độ an toàn khỏe mạnh: ${((1 - r.leafDiseaseProb) * 100).toInt()}%"
-        } else {
-            "Trạng thái phân tích: ${r.leafStatus}"
+        binding.layoutLeafProb.isVisible = leafPct != null
+        if (leafPct != null) {
+            binding.tvLeafProb.text =
+                if (r.leafLevel == "healthy") "Mức độ khỏe mạnh $leafPct%" else "Xác suất nhiễm bệnh $leafPct%"
+            binding.progressLeaf.setIndicatorColor(color(leaf.color))
+            binding.progressLeaf.setProgressCompat(leafPct, false)
         }
-        binding.tvLeafProb.text = leafProbText
         binding.tvLeafSymptoms.text = r.leafSymptoms
 
-        // 2. Dấu hiệu quả
-        val isFruitKnown = r.fruitConfidence >= 0.5f && r.fruitLabel != null && r.fruitLabel != "unknown" && !r.fruitNameVi.contains("không rõ", ignoreCase = true)
-        val isFruitRotten = isFruitKnown && r.fruitLabel.contains("rotten", ignoreCase = true)
-        val isFruitFresh = isFruitKnown && r.fruitLabel.contains("fresh", ignoreCase = true)
-        val isFruitInter = isFruitKnown && r.fruitLabel.contains("intermediate", ignoreCase = true)
-
-        when {
-            isFruitRotten -> {
-                binding.tvFruitBadge.text = "BỊ THỐI HỎNG"
-                binding.tvFruitBadge.backgroundTintList = ColorStateList.valueOf(dangerColor)
-            }
-            isFruitInter -> {
-                binding.tvFruitBadge.text = "SẮP HỎNG / HÉO"
-                binding.tvFruitBadge.backgroundTintList = ColorStateList.valueOf(warningColor)
-            }
-            isFruitFresh -> {
-                binding.tvFruitBadge.text = "TƯƠI TỐT"
-                binding.tvFruitBadge.backgroundTintList = ColorStateList.valueOf(healthyColor)
-            }
-            else -> {
-                binding.tvFruitBadge.text = "KHÔNG RÕ"
-                binding.tvFruitBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#757575"))
-            }
-        }
-
-        binding.tvFruitName.text = if (!isFruitKnown) "Không rõ" else r.fruitNameVi
-        val confPct = (r.fruitConfidence * 100).toInt()
-        binding.tvFruitConf.text = when {
-            !isFruitKnown && confPct > 0 -> "Độ tin cậy: $confPct% (< 50% - Không rõ)"
-            confPct > 0 -> "Độ tin cậy nhận diện: $confPct%"
-            else -> "Không phát hiện quả rõ nét"
-        }
+        // 3. Qua
+        binding.tvFruitBadge.applyBadge(r.fruitStyle())
+        binding.tvFruitName.text = if (r.isFruitKnown) r.fruitNameVi else "Không rõ"
+        val fruitPct = (r.fruitConfidence * 100).toInt()
+        binding.layoutFruitConf.isVisible = fruitPct > 0
+        binding.tvFruitConf.text =
+            if (r.isFruitKnown) "Độ tin cậy $fruitPct%" else "Độ tin cậy $fruitPct% (dưới 50% nên chưa kết luận)"
+        binding.progressFruit.setIndicatorColor(color(r.fruitStyle().color))
+        binding.progressFruit.setProgressCompat(fruitPct, false)
         binding.tvFruitSymptoms.text = r.fruitSymptoms
-    }
 
-    companion object {
-        const val EXTRA_RECORD_ID = "extra_record_id"
-        const val EXTRA_RECORD = "extra_record"
+        // 4. Loi khuyen + noi dung LCD
+        binding.tvAdvice.text = r.advice
+        binding.cardLcd.isVisible = !r.lcdText.isNullOrBlank()
+        binding.tvLcd.text = r.lcdText
     }
 }

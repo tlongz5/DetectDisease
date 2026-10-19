@@ -1,104 +1,58 @@
 package com.example.detectplantdiase
 
-import android.content.res.ColorStateList
-import android.graphics.Color
+import android.graphics.Bitmap
+import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.detectplantdiase.databinding.ItemDetectionBinding
 
 class HistoryAdapter(
-    private var items: List<DetectionRecord>,
     private val onItemClick: (DetectionRecord) -> Unit
-) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
+) : ListAdapter<DetectionRecord, HistoryAdapter.ViewHolder>(DIFF) {
 
-    fun updateData(newItems: List<DetectionRecord>) {
-        items = newItems
-        notifyDataSetChanged()
+    // Anh thu nho da doc: cuon len xuong hoac co ban ghi moi (30 giay/lan) khong phai doc lai file
+    private val thumbs = object : LruCache<String, Bitmap>(12 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemDetectionBinding.inflate(
-            LayoutInflater.from(parent.context),
-            parent,
-            false
-        )
+        val binding = ItemDetectionBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return ViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(items[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = items.size
 
     inner class ViewHolder(private val binding: ItemDetectionBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(item: DetectionRecord) {
-            val context = binding.root.context
-
-            // Ảnh thu nhỏ
-            val bitmap = HistoryManager.loadBitmapFromFile(item.imagePath)
-            if (bitmap != null) {
-                binding.imgThumb.setImageBitmap(bitmap)
+            val thumb = thumbs.get(item.imagePath)
+                ?: HistoryManager.loadThumbnail(item.imagePath, 160)?.also { thumbs.put(item.imagePath, it) }
+            if (thumb != null) {
+                binding.imgThumb.setImageBitmap(thumb)
             } else {
-                binding.imgThumb.setImageResource(android.R.drawable.ic_menu_gallery)
+                binding.imgThumb.setImageResource(R.drawable.ic_image)
             }
 
-            // Tiêu đề
-            val title = if (!item.leafDiseaseNameVi.isNullOrBlank()) {
-                "${item.leafDiseaseNameVi} ${if (!item.leafDiseaseCode.isNullOrBlank()) "(${item.leafDiseaseCode})" else ""}"
-            } else {
-                item.overallTitle
-            }
-            binding.txtTitle.text = title
+            binding.txtTitle.text = item.displayTitle
+            binding.txtStatus.applyBadge(overallStyle(item.overallStatus))
+            binding.txtLeaf.text = item.leafBrief
+            binding.txtFruit.text = item.fruitBrief
+            binding.txtSubtitle.text = "${HistoryManager.formatTimeShort(item.timestamp)} • ${item.source}"
 
-            // Tóm tắt quả & lá
-            val fruitPart = "🍅 " + when {
-                item.fruitConfidence < 0.5f || item.fruitLabel == "unknown" || item.fruitNameVi.contains("không rõ", ignoreCase = true) -> "Không rõ"
-                item.fruitLabel != null -> item.fruitNameVi
-                else -> "Không có quả"
-            }
-            val leafPart = "🍃 " + when (item.leafLevel) {
-                "diseased" -> "Bệnh ${(item.leafDiseaseProb * 100).toInt()}%"
-                "suspect" -> "Nghi ngờ ${(item.leafDiseaseProb * 100).toInt()}%"
-                "healthy" -> "Lá khỏe"
-                else -> item.leafStatus
-            }
-            binding.txtSymptomsBrief.text = "$fruitPart • $leafPart"
+            binding.root.setOnClickListener { onItemClick(item) }
+        }
+    }
 
-            // Phụ đề thời gian & nguồn
-            binding.txtSubtitle.text = "🕒 ${HistoryManager.formatTimeShort(item.timestamp)} • ${item.source}"
-
-            // Trạng thái badge
-            val dangerColor = ContextCompat.getColor(context, R.color.color_danger)
-            val warningColor = ContextCompat.getColor(context, R.color.color_warning)
-            val healthyColor = ContextCompat.getColor(context, R.color.color_healthy)
-
-            when (item.overallStatus) {
-                "DISEASED" -> {
-                    binding.txtStatus.text = "CÓ BỆNH"
-                    binding.txtStatus.backgroundTintList = ColorStateList.valueOf(dangerColor)
-                }
-                "WARNING" -> {
-                    binding.txtStatus.text = "CẢNH BÁO"
-                    binding.txtStatus.backgroundTintList = ColorStateList.valueOf(warningColor)
-                }
-                "HEALTHY" -> {
-                    binding.txtStatus.text = "KHỎE MẠNH"
-                    binding.txtStatus.backgroundTintList = ColorStateList.valueOf(healthyColor)
-                }
-                else -> {
-                    binding.txtStatus.text = "CHƯA RÕ"
-                    binding.txtStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#757575"))
-                }
-            }
-
-            binding.root.setOnClickListener {
-                onItemClick(item)
-            }
+    companion object {
+        private val DIFF = object : DiffUtil.ItemCallback<DetectionRecord>() {
+            override fun areItemsTheSame(oldItem: DetectionRecord, newItem: DetectionRecord) = oldItem.id == newItem.id
+            override fun areContentsTheSame(oldItem: DetectionRecord, newItem: DetectionRecord) = oldItem == newItem
         }
     }
 }

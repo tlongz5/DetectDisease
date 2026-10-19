@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <!-- Cham de lay net, chum 2 ngon de zoom (CameraController tu xu ly) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:scaleType="fillCenter" />
+
+    <!-- Thanh tren: dong, flash -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="@drawable/bg_scrim_top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="28dp">
+
+        <ImageButton
+            android:id="@+id/btnClose"
+            style="@style/Widget.App.CameraButton"
+            android:contentDescription="Đóng camera"
+            android:src="@drawable/ic_close" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Chụp ảnh cây"
+            android:textColor="@color/white"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btnFlash"
+            style="@style/Widget.App.CameraButton"
+            android:contentDescription="Bật tắt đèn flash"
+            android:src="@drawable/ic_flash_off" />
+    </LinearLayout>
+
+    <!-- Thanh duoi: thu vien, nut chup, doi camera -->
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_scrim_bottom"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="40dp"
+        android:paddingBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:gravity="center"
+            android:paddingHorizontal="32dp"
+            android:text="Đưa lá hoặc quả cà chua vào giữa khung hình, chạm để lấy nét"
+            android:textColor="#E6FFFFFF"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="36dp">
+
+            <ImageButton
+                android:id="@+id/btnGallery"
+                style="@style/Widget.App.CameraButton"
+                android:contentDescription="Chọn ảnh từ thư viện"
+                android:src="@drawable/ic_image" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btnShutter"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:background="@drawable/bg_shutter"
+                android:contentDescription="Chụp ảnh" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btnFlip"
+                style="@style/Widget.App.CameraButton"
+                android:contentDescription="Đổi camera trước sau"
+                android:src="@drawable/ic_flip_camera" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Chua co quyen camera -->
+    <LinearLayout
+        android:id="@+id/layoutPermission"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageView
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_photo_camera"
+            app:tint="@color/white" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:text="Cần quyền dùng camera để chụp ảnh cây"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="Bạn vẫn có thể chọn ảnh có sẵn bằng nút thư viện bên dưới."
+            android:textColor="#B3FFFFFF"
+            android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGrant"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Cấp quyền camera" />
+    </LinearLayout>
+
+    <!-- Dang phan tich anh -->
+    <FrameLayout
+        android:id="@+id/layoutProcessing"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/camera_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/imgCaptured"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0.5"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            app:cardCornerRadius="24dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:minWidth="220dp"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <com.google.android.material.progressindicator.CircularProgressIndicator
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:indeterminate="true"
+                    app:indicatorColor="@color/primary_green"
+                    app:indicatorSize="48dp" />
+
+                <TextView
+                    android:id="@+id/tvProcessing"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:text="Đang phân tích ảnh…"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
+</FrameLayout>

@@ -4,12 +4,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- May khong co camera van cai duoc: dung anh tu thu vien / ESP32-CAM -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -22,10 +28,11 @@
         android:theme="@style/Theme.DetectPlantDiase"
         android:usesCleartextTraffic="true">
 
+        <!-- Man goc: Trang chu / Lich su. Cac man khac mo chong len, bam quay lai ve day -->
         <activity
-            android:name=".ConfigActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize">
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -34,19 +41,23 @@
         </activity>
 
         <activity
-            android:name=".DailyActivity"
+            android:name=".SettingsActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".MainActivity"
-            android:exported="false"
+            android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".DetailActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".CameraActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.DetectPlantDiase.Camera"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
 
         <!-- Foreground Service chạy ngầm định kỳ -->
         <service

@@ -4,16 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginHorizontal="4dp"
-    android:layout_marginVertical="6dp"
+    android:layout_marginVertical="5dp"
     android:clickable="true"
     android:focusable="true"
-    android:foreground="?attr/selectableItemBackground"
-    app:cardBackgroundColor="@color/card_bg"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="1.5dp"
-    app:strokeColor="@color/border_color"
-    app:strokeWidth="1dp">
+    app:cardCornerRadius="18dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -24,12 +18,12 @@
 
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/imgThumb"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
-            android:background="#E0E0E0"
-            android:contentDescription="Ảnh cây thu nhỏ"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:background="@color/surface_mid"
+            android:contentDescription="Ảnh đã chụp"
             android:scaleType="centerCrop"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small" />
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.App.Medium" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -38,66 +32,72 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/txtTitle"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/text_primary"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                tools:text="Cà chua • Mốc sương (TLB)" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/txtTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    tools:text="Phát hiện bệnh lá cây" />
+
+                <TextView
+                    android:id="@+id/txtStatus"
+                    style="@style/Widget.App.Badge"
+                    android:layout_marginStart="8dp"
+                    android:textSize="11sp"
+                    tools:text="Có bệnh" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/txtSymptomsBrief"
-                android:layout_width="wrap_content"
+                android:id="@+id/txtLeaf"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:drawablePadding="6dp"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                app:drawableStartCompat="@drawable/ic_eco"
+                app:drawableTint="@color/primary_green"
+                tools:text="Bệnh 95%: Cà chua - mốc sương" />
+
+            <TextView
+                android:id="@+id/txtFruit"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
+                android:drawablePadding="6dp"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                app:drawableStartCompat="@drawable/ic_tomato"
+                app:drawableTint="@color/color_danger"
+                tools:text="Cà chua tươi (92%)" />
+
+            <TextView
+                android:id="@+id/txtSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
-                tools:text="🍅 Quả tươi tốt • 🍃 Bệnh lá 94%" />
-
-            <TextView
-                android:id="@+id/txtSubtitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
-                tools:text="🕒 14:00 • 07/10/2026 • ESP32-CAM" />
+                tools:text="14:05 • 19/10 • ESP32-CAM (Tự động)" />
         </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/txtStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_badge_rounded"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="3dp"
-                android:textColor="@android:color/white"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                tools:text="CÓ BỆNH" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Chi tiết ›"
-                android:textColor="@color/primary_green"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
     </LinearLayout>
-
 </com.google.android.material.card.MaterialCardView>

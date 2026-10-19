@@ -32,7 +32,7 @@ android {
         getByName("androidTest") { java.srcDirs("androidTest/java") }
     }
 
-    // ConfigActivity, HistoryAdapter... dung ViewBinding (ActivityConfigBinding, ItemDetectionBinding...)
+    // Cac man hinh dung ViewBinding (ActivityMainBinding, FragmentHomeBinding, ItemDetectionBinding...)
     buildFeatures { viewBinding = true }
 
     compileOptions {
@@ -52,6 +52,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
+
+    // Camera chup anh ngay trong app (man CameraActivity)
+    val cameraxVersion = "1.4.2"
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

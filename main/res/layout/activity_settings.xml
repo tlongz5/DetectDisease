@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:minHeight="?attr/actionBarSize"
+        app:navigationContentDescription="Quay lại"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:title="Cài đặt"
+        app:titleTextAppearance="@style/TextAppearance.App.Section" />
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="24dp">
+
+            <!-- Ket noi ESP32-CAM -->
+            <TextView
+                style="@style/TextAppearance.App.Section"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Kết nối ESP32-CAM" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilIpAddress"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Địa chỉ IP ESP32-CAM"
+                        app:boxCornerRadiusBottomEnd="14dp"
+                        app:boxCornerRadiusBottomStart="14dp"
+                        app:boxCornerRadiusTopEnd="14dp"
+                        app:boxCornerRadiusTopStart="14dp"
+                        app:helperText="Xem IP trên Serial Monitor của ESP32-CAM, ví dụ 192.168.1.50"
+                        app:startIconDrawable="@drawable/ic_wifi">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/edtIpAddress"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:maxLines="1"
+                            android:textColor="@color/text_primary" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnTestConnection"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Kiểm tra kết nối" />
+
+                        <TextView
+                            android:id="@+id/tvConnectionStatus"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:textSize="13sp"
+                            tools:text="Kết nối thành công" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_note"
+                        android:drawablePadding="10dp"
+                        android:lineSpacingExtra="2dp"
+                        android:padding="12dp"
+                        android:text="Không có router? Cho điện thoại vào WiFi TuoiCay-CAM do ESP tự phát: app tự dùng địa chỉ cố định 192.168.4.1, không cần nhập IP."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        app:drawableStartCompat="@drawable/ic_lightbulb"
+                        app:drawableTint="@color/color_warning" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Chu ky tu dong chup -->
+            <TextView
+                style="@style/TextAppearance.App.Section"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Chu kỳ tự động chụp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="8dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="16dp">
+
+                    <RadioGroup
+                        android:id="@+id/rgModes"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/rbMode30s"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:text="Mỗi 30 giây (theo dõi sát)"
+                            android:textSize="15sp" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/rbMode1Minute"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:text="Mỗi 1 phút (thử nhanh)"
+                            android:textSize="15sp" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/rbMode1Hour"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:text="Mỗi 1 giờ (khuyên dùng)"
+                            android:textSize="15sp" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/rbMode1Day"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:text="Mỗi 1 ngày"
+                            android:textSize="15sp" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/rbModeCustom"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:text="Tùy chỉnh"
+                            android:textSize="15sp" />
+                    </RadioGroup>
+
+                    <LinearLayout
+                        android:id="@+id/layoutCustomInterval"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:orientation="vertical"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilInterval"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="Chụp lại sau mỗi"
+                            app:boxCornerRadiusBottomEnd="14dp"
+                            app:boxCornerRadiusBottomStart="14dp"
+                            app:boxCornerRadiusTopEnd="14dp"
+                            app:boxCornerRadiusTopStart="14dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/edtInterval"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="numberDecimal"
+                                android:maxLines="1"
+                                android:textColor="@color/text_primary" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/toggleUnit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnUnitMinutes"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Phút" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnUnitHours"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Giờ" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnUnitDays"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Ngày" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvModeDescription"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/bg_note"
+                        android:lineSpacingExtra="2dp"
+                        android:padding="12dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        tools:text="Chụp ngay lần đầu, sau đó lặp lại mỗi 1 giờ." />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Lưu cài đặt"
+            android:textSize="16sp"
+            app:cornerRadius="16dp" />
+    </LinearLayout>
+</LinearLayout>

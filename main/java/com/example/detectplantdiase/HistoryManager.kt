@@ -14,7 +14,8 @@ import java.util.UUID
 
 object HistoryManager {
     private const val FILE_NAME = "detection_history.json"
-    private const val MAX_HISTORY_SIZE = 50
+    // Chup 30 giay/lan thi 200 ban ghi ~ 100 phut, ~40 MB anh
+    private const val MAX_HISTORY_SIZE = 200
 
     @Synchronized
     fun getHistory(context: Context): List<DetectionRecord> {
@@ -367,6 +368,13 @@ object HistoryManager {
         )
     }
 
+    /** Xoa toan bo lich su va anh da luu */
+    @Synchronized
+    fun clearHistory(context: Context) {
+        File(context.filesDir, "detections").deleteRecursively()
+        File(context.filesDir, FILE_NAME).delete()
+    }
+
     private fun saveListToFile(context: Context, list: List<DetectionRecord>) {
         try {
             val array = JSONArray()
@@ -394,6 +402,21 @@ object HistoryManager {
             if (file.exists()) {
                 BitmapFactory.decodeFile(file.absolutePath)
             } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Doc anh thu nho (canh ngan ~ minSide px) cho danh sach: anh ESP 1600x1200 doc ca anh thi cuon bi giat */
+    fun loadThumbnail(path: String, minSide: Int): Bitmap? {
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, bounds)
+            val short = minOf(bounds.outWidth, bounds.outHeight)
+            if (short <= 0) return null
+            var sample = 1
+            while (short / (sample * 2) >= minSide) sample *= 2
+            BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
         } catch (e: Exception) {
             null
         }

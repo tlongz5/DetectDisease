@@ -4,101 +4,147 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_light"
+    android:background="@color/white"
     android:orientation="vertical">
 
-    <!-- Top App Bar -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/card_bg"
-        android:elevation="4dp"
-        app:navigationIcon="@android:drawable/ic_menu_revert"
-        app:title="Chi tiết kiểm tra cây"
-        app:titleTextAppearance="?attr/textAppearanceTitleMedium"
-        app:titleTextColor="@color/text_primary" />
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:minHeight="?attr/actionBarSize"
+        app:navigationContentDescription="Quay lại"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:title="Kết quả phân tích"
+        app:titleTextAppearance="@style/TextAppearance.App.Section" />
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollDetail"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:padding="16dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="24dp">
 
-            <!-- 1. Card Ảnh kiểm tra -->
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/imgDetail"
+                android:layout_width="match_parent"
+                android:layout_height="260dp"
+                android:background="@color/surface_mid"
+                android:contentDescription="Ảnh đã phân tích"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.App.Large" />
+
+            <!-- Tong ket: mau nen theo tinh trang -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardOverall"
+                style="@style/Widget.App.Card.Tinted"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:strokeColor="@color/border_color"
-                app:strokeWidth="1dp">
+                android:layout_marginTop="16dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="horizontal"
+                    android:padding="16dp">
 
                     <ImageView
-                        android:id="@+id/imgDetail"
-                        android:layout_width="match_parent"
-                        android:layout_height="240dp"
-                        android:background="#E0E0E0"
-                        android:contentDescription="Ảnh chi tiết kiểm tra"
-                        android:scaleType="centerCrop" />
+                        android:id="@+id/imgOverallIcon"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle"
+                        android:importantForAccessibility="no"
+                        android:padding="9dp"
+                        tools:src="@drawable/ic_check_circle" />
 
                     <LinearLayout
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:background="@color/card_bg"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="10dp">
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
                         <TextView
-                            android:id="@+id/tvDetailTime"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="13sp"
-                            tools:text="🕒 14:30:25 - 07/10/2026" />
-
-                        <TextView
-                            android:id="@+id/tvDetailSource"
+                            android:id="@+id/tvOverallLabel"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:background="@drawable/bg_badge_rounded"
-                            android:backgroundTint="@color/color_info_light"
-                            android:paddingHorizontal="8dp"
-                            android:paddingVertical="4dp"
-                            android:textColor="@color/color_info"
+                            android:textAllCaps="true"
                             android:textSize="12sp"
                             android:textStyle="bold"
-                            tools:text="ESP32-CAM" />
+                            tools:text="Khỏe mạnh" />
+
+                        <TextView
+                            android:id="@+id/tvOverallTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textColor="@color/text_primary"
+                            android:textSize="17sp"
+                            android:textStyle="bold"
+                            tools:text="Cây phát triển khỏe mạnh" />
+
+                        <TextView
+                            android:id="@+id/tvOverallSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            tools:text="Tán lá xanh tươi không bệnh." />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Thoi gian / nguon / thoi gian AI -->
+            <com.google.android.material.chip.ChipGroup
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:chipSpacingHorizontal="8dp">
 
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipTime"
+                    style="@style/Widget.Material3.Chip.Assist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    app:chipIcon="@drawable/ic_schedule"
+                    tools:text="14:05:30 - 19/10/2026" />
 
-            <!-- 3. Card Dấu hiệu lá -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipSource"
+                    style="@style/Widget.Material3.Chip.Assist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    app:chipIcon="@drawable/ic_photo_camera"
+                    tools:text="ESP32-CAM (Tự động)" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipInference"
+                    style="@style/Widget.Material3.Chip.Assist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    app:chipIcon="@drawable/ic_memory"
+                    tools:text="AI 1,2 giây" />
+            </com.google.android.material.chip.ChipGroup>
+
+            <!-- La -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:strokeColor="@color/border_color"
-                app:strokeWidth="1dp">
+                android:layout_marginTop="12dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -112,83 +158,85 @@
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
+                        <ImageView
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_circle"
+                            android:backgroundTint="@color/primary_container"
+                            android:importantForAccessibility="no"
+                            android:padding="8dp"
+                            android:src="@drawable/ic_eco"
+                            app:tint="@color/primary_green" />
+
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
                             android:layout_weight="1"
-                            android:text="🍃 DẤU HIỆU LÁ CÂY"
-                            android:textColor="@color/text_primary"
+                            android:text="Lá cây"
+                            android:textColor="@color/text_secondary"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
-                            android:id="@+id/tvLeafLevelBadge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="@drawable/bg_badge_rounded"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp"
-                            android:textColor="@color/white"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            tools:text="KHỎE MẠNH" />
+                            android:id="@+id/tvLeafBadge"
+                            style="@style/Widget.App.Badge"
+                            tools:text="Khỏe mạnh" />
                     </LinearLayout>
 
                     <TextView
                         android:id="@+id/tvLeafDiagnosis"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="12dp"
                         android:textColor="@color/text_primary"
-                        android:textSize="15sp"
+                        android:textSize="17sp"
                         android:textStyle="bold"
-                        tools:text="Cà chua - Mốc sương (TLB)" />
+                        tools:text="Cà chua - mốc sương (TLB)" />
 
-                    <TextView
-                        android:id="@+id/tvLeafProb"
+                    <LinearLayout
+                        android:id="@+id/layoutLeafProb"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        tools:text="Xác suất bệnh: 94% (Mức độ nguy hại cao)" />
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginVertical="10dp"
-                        android:background="@color/border_color" />
+                        <TextView
+                            android:id="@+id/tvLeafProb"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            tools:text="Xác suất nhiễm bệnh 95%" />
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Mô tả triệu chứng &amp; biểu hiện:"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        <com.google.android.material.progressindicator.LinearProgressIndicator
+                            android:id="@+id/progressLeaf"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:max="100"
+                            app:trackColor="@color/surface_high"
+                            app:trackCornerRadius="4dp"
+                            app:trackThickness="8dp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/tvLeafSymptoms"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="12dp"
                         android:lineSpacingExtra="3dp"
                         android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        tools:text="Cảnh báo bệnh hại: Tán lá có tổn thương rõ rệt với xác suất nhiễm 94%. Chẩn đoán: Cà chua - mốc sương. Các vùng đốm lá bị hoại tử hoặc biến màu bất thường." />
+                        android:textSize="14sp"
+                        tools:text="Lá xanh tươi khỏe mạnh..." />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 4. Card Dấu hiệu quả -->
+            <!-- Qua -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:strokeColor="@color/border_color"
-                app:strokeWidth="1dp">
+                android:layout_marginTop="12dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -202,76 +250,167 @@
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
+                        <ImageView
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_circle"
+                            android:backgroundTint="@color/color_danger_light"
+                            android:importantForAccessibility="no"
+                            android:padding="8dp"
+                            android:src="@drawable/ic_tomato"
+                            app:tint="@color/color_danger" />
+
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
                             android:layout_weight="1"
-                            android:text="🍅 DẤU HIỆU QUẢ"
-                            android:textColor="@color/text_primary"
+                            android:text="Quả"
+                            android:textColor="@color/text_secondary"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
                             android:id="@+id/tvFruitBadge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="@drawable/bg_badge_rounded"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp"
-                            android:textColor="@color/white"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            tools:text="TƯƠI TỐT" />
+                            style="@style/Widget.App.Badge"
+                            tools:text="Tươi tốt" />
                     </LinearLayout>
 
                     <TextView
                         android:id="@+id/tvFruitName"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="12dp"
                         android:textColor="@color/text_primary"
-                        android:textSize="15sp"
+                        android:textSize="17sp"
                         android:textStyle="bold"
-                        tools:text="Cà chua - Tươi tốt" />
+                        tools:text="Cà chua tươi" />
 
-                    <TextView
-                        android:id="@+id/tvFruitConf"
+                    <LinearLayout
+                        android:id="@+id/layoutFruitConf"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        tools:text="Độ tin cậy nhận diện: 98%" />
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginVertical="10dp"
-                        android:background="@color/border_color" />
+                        <TextView
+                            android:id="@+id/tvFruitConf"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            tools:text="Độ tin cậy 92%" />
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Mô tả tình trạng quả:"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        <com.google.android.material.progressindicator.LinearProgressIndicator
+                            android:id="@+id/progressFruit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:max="100"
+                            app:trackColor="@color/surface_high"
+                            app:trackCornerRadius="4dp"
+                            app:trackThickness="8dp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/tvFruitSymptoms"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="12dp"
                         android:lineSpacingExtra="3dp"
                         android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        tools:text="Quả căng mọng, bề mặt nhẵn bóng, không có vết thâm nấm (Độ tin cậy: 98%). Phát triển rất tốt." />
+                        android:textSize="14sp"
+                        tools:text="Quả căng mọng..." />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Loi khuyen -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp">
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
 
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_circle"
+                            android:backgroundTint="@color/color_warning_light"
+                            android:importantForAccessibility="no"
+                            android:padding="8dp"
+                            android:src="@drawable/ic_lightbulb"
+                            app:tint="@color/color_warning" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:text="Lời khuyên chăm sóc"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvAdvice"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:lineSpacingExtra="4dp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        tools:text="1. Tiếp tục duy trì chế độ chăm sóc..." />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Noi dung da gui len LCD (chi co khi chup tu ESP32-CAM) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardLcd"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Đã gửi lên màn hình LCD"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvLcd"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_lcd"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:padding="14dp"
+                        android:textColor="@color/lcd_text"
+                        android:textSize="14sp"
+                        tools:text="La ca chua: Khoe 97%\nQua ca chua: Tuoi 92%" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
-
 </LinearLayout>

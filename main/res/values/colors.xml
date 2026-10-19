@@ -2,23 +2,45 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Mau chinh: xanh la cay -->
     <color name="primary_green">#2E7D32</color>
     <color name="primary_green_dark">#1B5E20</color>
+    <color name="primary_container">#E4F2E5</color>
+    <color name="on_primary_container">#0F3D14</color>
     <color name="accent_green">#4CAF50</color>
     <color name="light_green">#E8F5E9</color>
-    <color name="bg_light">#F5F7FA</color>
+
+    <!-- Nen trang, cac lop nen phu xam ánh xanh rat nhat (thay bang mau tim mac dinh cua Material 3) -->
+    <color name="bg_light">#FFFFFF</color>
     <color name="card_bg">#FFFFFF</color>
-    <color name="text_primary">#212121</color>
-    <color name="text_secondary">#757575</color>
-    <color name="border_color">#E0E0E0</color>
+    <color name="surface_low">#F7F9F7</color>
+    <color name="surface_mid">#F1F4F1</color>
+    <color name="surface_high">#EBEFEB</color>
+    <color name="surface_highest">#E5EAE5</color>
+    <color name="neutral_container">#EEF1EE</color>
+
+    <color name="text_primary">#1A1C1A</color>
+    <color name="text_secondary">#5F6B60</color>
+    <color name="border_color">#E3E8E3</color>
+
     <color name="status_connected">#2E7D32</color>
-    <color name="status_error">#D32F2F</color>
-    <color name="color_danger">#D32F2F</color>
-    <color name="color_danger_light">#FFEBEE</color>
-    <color name="color_warning">#E65100</color>
-    <color name="color_warning_light">#FFF3E0</color>
+    <color name="status_error">#C62828</color>
+
+    <color name="color_danger">#C62828</color>
+    <color name="color_danger_light">#FDECEC</color>
+    <color name="color_warning">#D35400</color>
+    <color name="color_warning_light">#FFF1E3</color>
     <color name="color_healthy">#2E7D32</color>
-    <color name="color_healthy_light">#E8F5E9</color>
-    <color name="color_info">#1976D2</color>
-    <color name="color_info_light">#E3F2FD</color>
+    <color name="color_healthy_light">#E4F2E5</color>
+    <color name="color_info">#1565C0</color>
+    <color name="color_info_light">#E7F0FB</color>
+
+    <!-- Man hinh LCD 1602 (xem truoc noi dung da gui ve Nano) -->
+    <color name="lcd_bg">#1F3A24</color>
+    <color name="lcd_text">#C8F7C5</color>
+
+    <!-- Man Camera -->
+    <color name="camera_button_bg">#66000000</color>
+    <color name="camera_scrim">#99000000</color>
 </resources>

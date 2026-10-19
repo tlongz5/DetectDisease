@@ -10,22 +10,25 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.TaskStackBuilder
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 class GardenMonitorService : Service() {
 
@@ -37,6 +40,11 @@ class GardenMonitorService : Service() {
 
         const val BROADCAST_DETECTION_UPDATED = "com.example.detectplantdiase.DETECTION_UPDATED"
         const val BROADCAST_SERVICE_STATUS = "com.example.detectplantdiase.SERVICE_STATUS"
+        const val BROADCAST_CAPTURE_FAILED = "com.example.detectplantdiase.CAPTURE_FAILED"
+        const val EXTRA_ERROR = "error"
+
+        const val SOURCE_ESP_MANUAL = "ESP32-CAM (Chụp ngay)"
+        const val SOURCE_ESP_AUTO = "ESP32-CAM (Tự động)"
 
         const val CHANNEL_SERVICE_ID = "garden_monitor_service_channel"
         const val CHANNEL_ALERT_ID = "garden_disease_alert_channel"
@@ -45,14 +53,23 @@ class GardenMonitorService : Service() {
 
         const val ALARM_REQUEST_CODE = 3001
 
+        // Chu ky ngan hon 1 phut (vd 30 giay) thi AlarmManager khong bao dung gio (Android gom/hoan bao thuc),
+        // nen dem gio ngay trong service va giu CPU thuc
+        private const val SHORT_INTERVAL_MS = 60_000L
+        private const val LOOP_WAKELOCK_MS = 10 * 60_000L  // Moi lan hen lai gia han them, loi thi tu nha sau 10 phut
+
+        // Chup 30 giay/lan thi khong bao benh lien tuc: chi bao khi tinh trang moi xuat hien, hoac nhac lai sau 30 phut
+        private const val ALERT_REPEAT_MS = 30 * 60_000L
+
+        /** Dang bat tu dong chup theo chu ky */
         @Volatile
         var isServiceRunning: Boolean = false
             private set
 
-        @Volatile
-        var isCapturing: Boolean = false
-            private set
+        private val capturing = AtomicBoolean(false)
+        val isCapturing: Boolean get() = capturing.get()
 
+        @Volatile
         var nextRunTimeMillis: Long = 0L
             private set
 
@@ -78,6 +95,7 @@ class GardenMonitorService : Service() {
             }
         }
 
+        /** Chup 1 anh tu ESP32-CAM ngay bay gio, khong anh huong lich tu dong chup */
         fun triggerNow(context: Context) {
             val intent = Intent(context, GardenMonitorService::class.java).apply {
                 action = ACTION_TRIGGER_NOW
@@ -92,9 +110,11 @@ class GardenMonitorService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private var leafModel: LeafDiseaseClassifier? = null
-    private var fruitModel: FreshnessClassifier? = null
-    @Volatile private var modelsLoaded = false
+    private var nextRunJob: Job? = null           // Hen gio chup cho chu ky ngan
+    private var loopWakeLock: PowerManager.WakeLock? = null
+    private var lastResultText = ""
+    private var lastAlertStatus: String? = null
+    private var lastAlertAt = 0L
 
     private lateinit var notificationManager: NotificationManager
 
@@ -102,40 +122,55 @@ class GardenMonitorService : Service() {
         super.onCreate()
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannels()
-        loadAiModels()
+        serviceScope.launch { AiEngine.load(this@GardenMonitorService) }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action ?: ACTION_START
+        // intent == null: Android dong tien trinh roi mo lai service (START_STICKY)
+        val action = intent?.action
+            ?: if (ConfigManager.isMonitoringEnabled(this)) ACTION_START else ACTION_STOP
 
         when (action) {
             ACTION_START -> {
+                cancelScheduledRuns()
+                ConfigManager.setMonitoringEnabled(this, true)
+                if (!promoteToForeground("Đang khởi động giám sát...")) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 isServiceRunning = true
-                promoteToForeground("Đang khởi động giám sát...")
                 broadcastStatus()
-                scheduleInitialOrNextRun(isFirstRun = true)
+                scheduleInitialOrNextRun()
             }
 
             ACTION_STOP -> {
                 isServiceRunning = false
-                cancelAlarm()
+                ConfigManager.setMonitoringEnabled(this, false)
+                cancelScheduledRuns()
                 broadcastStatus()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                if (!isCapturing) stopServiceNow()  // Dang chup do thi chup xong moi dung
             }
 
             ACTION_TRIGGER_NOW -> {
-                isServiceRunning = true
-                promoteToForeground("Đang chụp ảnh từ ESP32-CAM...")
-                executeCaptureAndInference(manualTrigger = true)
+                if (promoteToForeground("Đang chụp ảnh từ ESP32-CAM...")) {
+                    executeCaptureAndInference(manualTrigger = true)
+                } else if (!isServiceRunning && !isCapturing) {
+                    stopSelf()
+                }
             }
 
             ACTION_ALARM_TICK -> {
-                if (isServiceRunning) {
-                    promoteToForeground("Đang tự động chụp ảnh theo lịch...")
+                // Tien trinh bi dong roi mo lai thi bien static mat, doc lai tu cau hinh
+                if (!isServiceRunning && ConfigManager.isMonitoringEnabled(this)) isServiceRunning = true
+                // Duoc goi bang startForegroundService nen luon phai len foreground, ke ca khi dung ngay
+                val foreground = promoteToForeground("Đang tự động chụp ảnh theo lịch...")
+                if (foreground && isServiceRunning) {
                     executeCaptureAndInference(manualTrigger = false)
+                } else if (!isCapturing) {
+                    isServiceRunning = false
+                    stopServiceNow()
                 }
             }
         }
@@ -143,128 +178,126 @@ class GardenMonitorService : Service() {
         return START_STICKY
     }
 
-    private fun loadAiModels() {
-        serviceScope.launch(Dispatchers.Default) {
-            leafModel = try {
-                LeafDiseaseClassifier(this@GardenMonitorService)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
-            fruitModel = try {
-                FreshnessClassifier(this@GardenMonitorService)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
-            modelsLoaded = true
-        }
-    }
-
-    private fun promoteToForeground(statusText: String) {
+    /**
+     * Len foreground. Android 12+ co the tu choi khi app dang o nen (vd Android 15+ cam service dataSync chay
+     * luc vua khoi dong may): luc do dung service, lan sau mo app MainActivity se bat lai tu dong chup.
+     */
+    private fun promoteToForeground(statusText: String): Boolean {
         val notification = buildOngoingNotification(statusText)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_SERVICE_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
+                startForeground(NOTIFICATION_SERVICE_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
                 startForeground(NOTIFICATION_SERVICE_ID, notification)
             }
-        } else {
-            startForeground(NOTIFICATION_SERVICE_ID, notification)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
-    private fun scheduleInitialOrNextRun(isFirstRun: Boolean) {
-        val mode = ConfigManager.getMode(this)
-        val startDelayMs = ConfigManager.startDelayToMillis(this)
+    private fun stopServiceNow() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
 
-        if (isFirstRun && startDelayMs > 0L) {
+    private fun scheduleInitialOrNextRun() {
+        val startDelayMs = ConfigManager.startDelayToMillis(this)
+        if (startDelayMs > 0L) {
             // Có thời gian hẹn giờ bắt đầu sau X giờ/phút
             val triggerTime = System.currentTimeMillis() + startDelayMs
             scheduleExactAlarm(triggerTime)
-            val timeStr = formatClockTime(triggerTime)
-            updateOngoingNotification("Lần chụp đầu tiên lúc: $timeStr")
+            updateOngoingNotification("Lần chụp đầu tiên lúc: ${formatClockTime(triggerTime)}")
         } else {
             // Chạy ngay lần đầu tiên
-            executeCaptureAndInference(manualTrigger = (mode == ConfigManager.MODE_INSTANT))
+            executeCaptureAndInference(manualTrigger = false)
         }
     }
 
-    private fun scheduleNextIntervalRun() {
-        val mode = ConfigManager.getMode(this)
-        if (mode == ConfigManager.MODE_INSTANT) {
-            updateOngoingNotification("Chế độ: Chụp ngay lập tức (Đã hoàn tất)")
+    /** Hen lan chup ke tiep, tinh tu luc bat dau lan chup truoc: 30 giay la 30 giay giua 2 lan bam may */
+    @Synchronized
+    private fun scheduleNextIntervalRun(startedAt: Long) {
+        val intervalMs = ConfigManager.intervalToMillis(this)
+        if (!isServiceRunning || intervalMs <= 0L) {
             nextRunTimeMillis = 0L
             broadcastStatus()
             return
         }
 
-        val intervalMs = ConfigManager.intervalToMillis(this)
-        if (intervalMs > 0L && isServiceRunning) {
-            val nextTime = System.currentTimeMillis() + intervalMs
-            scheduleExactAlarm(nextTime)
-            val timeStr = formatClockTime(nextTime)
-            val modeTitle = ConfigManager.getModeDisplayName(this)
-            updateOngoingNotification("Lần chụp kế tiếp lúc: $timeStr ($modeTitle)")
+        val nextTime = maxOf(System.currentTimeMillis(), startedAt + intervalMs)
+        if (intervalMs < SHORT_INTERVAL_MS) {
+            scheduleInProcess(nextTime)
         } else {
-            updateOngoingNotification("Đã hoàn tất lịch chụp tự động")
-            nextRunTimeMillis = 0L
+            scheduleExactAlarm(nextTime)
         }
+        val next = "Lần chụp kế tiếp: ${formatClockTime(nextTime)} (${ConfigManager.getModeDisplayName(this)})"
+        updateOngoingNotification(if (lastResultText.isEmpty()) next else "$lastResultText\n$next")
         broadcastStatus()
+    }
+
+    private fun scheduleInProcess(triggerAtMillis: Long) {
+        nextRunTimeMillis = triggerAtMillis
+        val wakeLock = loopWakeLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DetectPlantDiase:ShortIntervalLoop")
+            .apply { setReferenceCounted(false) }
+            .also { loopWakeLock = it }
+        wakeLock.acquire(LOOP_WAKELOCK_MS)  // Tat man hinh van dem gio va chup tiep
+
+        nextRunJob?.cancel()
+        nextRunJob = serviceScope.launch {
+            delay(triggerAtMillis - System.currentTimeMillis())
+            if (isServiceRunning) executeCaptureAndInference(manualTrigger = false)
+        }
     }
 
     @SuppressLint("ScheduleExactAlarm")
     private fun scheduleExactAlarm(triggerAtMillis: Long) {
         nextRunTimeMillis = triggerAtMillis
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        val intent = Intent(this, GardenAlarmReceiver::class.java).apply {
-            action = ACTION_ALARM_TICK
-        }
         val pendingIntent = PendingIntent.getBroadcast(
             this,
             ALARM_REQUEST_CODE,
-            intent,
+            Intent(this, GardenAlarmReceiver::class.java).apply { action = ACTION_ALARM_TICK },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            }
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         } catch (e: Exception) {
             // Fallback nếu máy không cho phép exact alarm
             alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         }
     }
 
-    private fun cancelAlarm() {
+    /** Huy moi lich chup dang cho (bao thuc AlarmManager va hen gio trong service) */
+    @Synchronized
+    private fun cancelScheduledRuns() {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(this, GardenAlarmReceiver::class.java).apply {
-            action = ACTION_ALARM_TICK
-        }
         val pendingIntent = PendingIntent.getBroadcast(
             this,
             ALARM_REQUEST_CODE,
-            intent,
+            Intent(this, GardenAlarmReceiver::class.java).apply { action = ACTION_ALARM_TICK },
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         )
         if (pendingIntent != null) {
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
         }
+        nextRunJob?.cancel()
+        nextRunJob = null
+        loopWakeLock?.let { if (it.isHeld) it.release() }
         nextRunTimeMillis = 0L
     }
 
     private fun executeCaptureAndInference(manualTrigger: Boolean) {
-        if (isCapturing) return
-        isCapturing = true
+        if (!capturing.compareAndSet(false, true)) {
+            // Dang chup do (vd bam "Chụp ngay" dung luc toi lich): khong chup chong, hen lan sau
+            if (!manualTrigger) scheduleNextIntervalRun(System.currentTimeMillis())
+            return
+        }
+        val startedAt = System.currentTimeMillis()
+        broadcastStatus()
 
         serviceScope.launch {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -275,83 +308,61 @@ class GardenMonitorService : Service() {
             wakeLock.acquire(90_000L) // Giữ CPU chạy tối đa 90 giây để hoàn tất tải ảnh và inference
 
             try {
-                // Đợi model nạp xong nếu đang nạp
-                var retryCount = 0
-                while (!modelsLoaded && retryCount < 15) {
-                    kotlinx.coroutines.delay(500)
-                    retryCount++
-                }
+                updateOngoingNotification("Đang tải ảnh từ vườn (${ConfigManager.getCaptureUrl(this@GardenMonitorService)})...")
+                val bmp = withContext(Dispatchers.IO) { EspClient.fetchImage(this@GardenMonitorService) }
 
-                val espUrl = ConfigManager.getBaseUrl(this@GardenMonitorService)
-                val captureUrl = ConfigManager.getCaptureUrl(this@GardenMonitorService)
-                updateOngoingNotification("Đang tải ảnh từ vườn ($captureUrl)...")
-
-                val bmp = fetchEspImage(captureUrl)
                 updateOngoingNotification("Đang phân tích AI (Lá & Quả)...")
-
-                val t0 = System.currentTimeMillis()
-                val leafResult = leafModel?.analyze(bmp)
-                val fruitResult = fruitModel?.predict(bmp)
-                val ms = System.currentTimeMillis() - t0
-
-                // Gửi 2 dòng (lá, quả) về ESP32-CAM để Nano hiện lên LCD trong 20 giây
-                val lcd = LcdMessage.from(leafResult, fruitResult)
-                val sent = lcd.sendTo(this@GardenMonitorService, espUrl)
-
-                // Lưu vào nhật ký HistoryManager
-                val record = HistoryManager.saveDetection(
+                val (record, sent) = AiEngine.analyzeAndSave(
                     context = this@GardenMonitorService,
                     bitmap = bmp,
-                    leafResult = leafResult,
-                    fruitResult = fruitResult,
-                    source = if (manualTrigger) "ESP32-CAM (Chụp ngay)" else "ESP32-CAM (Tự động)",
-                    inferenceTimeMs = ms,
-                    lcdText = lcd.lcdText()
+                    source = if (manualTrigger) SOURCE_ESP_MANUAL else SOURCE_ESP_AUTO,
+                    sendToEsp = true
                 )
+                maybeSendDiseaseAlert(record)
 
-                // Phát broadcast để màn hình Daily/Main cập nhật giao diện ngay
-                sendBroadcast(Intent(BROADCAST_DETECTION_UPDATED))
-
-                // Nếu phát hiện bệnh hoặc cảnh báo, gửi thông báo khẩn cấp
-                if (record.overallStatus == "DISEASED" || record.overallStatus == "WARNING") {
-                    sendDiseaseAlertNotification(record)
-                }
-
-                val currentTimeStr = formatClockTime(System.currentTimeMillis())
-                updateOngoingNotification("Chụp xong lúc $currentTimeStr (${record.overallTitle}) • LCD: $sent")
-
+                lastResultText = "Chụp xong lúc ${formatClockTime(System.currentTimeMillis())} " +
+                    "(${record.overallTitle}) • LCD: $sent"
+                updateOngoingNotification(lastResultText)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
-                val currentTimeStr = formatClockTime(System.currentTimeMillis())
-                updateOngoingNotification("⚠️ Lỗi chụp lúc $currentTimeStr: ${e.message}")
+                lastResultText = "⚠️ Lỗi chụp lúc ${formatClockTime(System.currentTimeMillis())}: ${e.message}"
+                updateOngoingNotification(lastResultText)
+                sendBroadcast(
+                    Intent(BROADCAST_CAPTURE_FAILED).setPackage(packageName)
+                        .putExtra(EXTRA_ERROR, e.message ?: "Không rõ lỗi")
+                )
             } finally {
-                isCapturing = false
-                if (wakeLock.isHeld) {
-                    wakeLock.release()
-                }
+                capturing.set(false)
+                if (wakeLock.isHeld) wakeLock.release()
 
-                // Lên lịch lần chụp tiếp theo (nếu chu kỳ > 0)
-                if (!manualTrigger) {
-                    scheduleNextIntervalRun()
+                when {
+                    !isServiceRunning -> stopServiceNow()  // Chup ngay khi dang tat tu dong chup: xong thi dung
+                    !manualTrigger -> scheduleNextIntervalRun(startedAt)
+                    else -> broadcastStatus()
                 }
             }
         }
     }
 
-    private fun fetchEspImage(captureUrl: String): Bitmap {
-        val conn = ConfigManager.openEsp(this, captureUrl)
-        conn.connectTimeout = 7000
-        conn.readTimeout = 25000
-        try {
-            return conn.inputStream.use { BitmapFactory.decodeStream(it) }
-                ?: throw IllegalStateException("ESP32-CAM không trả về ảnh")
-        } finally {
-            conn.disconnect()
+    private fun maybeSendDiseaseAlert(record: DetectionRecord) {
+        if (record.overallStatus != "DISEASED" && record.overallStatus != "WARNING") {
+            lastAlertStatus = null
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (record.overallStatus != lastAlertStatus || now - lastAlertAt >= ALERT_REPEAT_MS) {
+            sendDiseaseAlertNotification(record)
+            lastAlertStatus = record.overallStatus
+            lastAlertAt = now
         }
     }
 
     private fun buildOngoingNotification(statusText: String): Notification {
-        val openAppIntent = Intent(this, DailyActivity::class.java)
+        // Mo lai dung man Trang chu dang co, khong tao them 1 ban moi chong len
+        val openAppIntent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val openAppPendingIntent = PendingIntent.getActivity(
             this,
             0,
@@ -359,61 +370,52 @@ class GardenMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val stopIntent = Intent(this, GardenMonitorService::class.java).apply {
-            action = ACTION_STOP
-        }
         val stopPendingIntent = PendingIntent.getService(
             this,
             1,
-            stopIntent,
+            Intent(this, GardenMonitorService::class.java).apply { action = ACTION_STOP },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val triggerIntent = Intent(this, GardenMonitorService::class.java).apply {
-            action = ACTION_TRIGGER_NOW
-        }
         val triggerPendingIntent = PendingIntent.getService(
             this,
             2,
-            triggerIntent,
+            Intent(this, GardenMonitorService::class.java).apply { action = ACTION_TRIGGER_NOW },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val ip = ConfigManager.getIp(this)
-
-        return NotificationCompat.Builder(this, CHANNEL_SERVICE_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("🌿 Tự động giám sát vườn cây ($ip)")
+        val builder = NotificationCompat.Builder(this, CHANNEL_SERVICE_ID)
+            .setSmallIcon(R.drawable.ic_eco)
+            .setContentTitle(if (isServiceRunning) "Tự động giám sát vườn ($ip)" else "Chụp ảnh từ vườn ($ip)")
             .setContentText(statusText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(statusText))
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(android.R.drawable.ic_menu_camera, "Chụp ngay", triggerPendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dừng", stopPendingIntent)
-            .build()
+            .addAction(R.drawable.ic_photo_camera, "Chụp ngay", triggerPendingIntent)
+        if (isServiceRunning) builder.addAction(R.drawable.ic_close, "Dừng", stopPendingIntent)
+        return builder.build()
     }
 
     private fun updateOngoingNotification(statusText: String) {
-        if (isServiceRunning) {
-            val notification = buildOngoingNotification(statusText)
-            notificationManager.notify(NOTIFICATION_SERVICE_ID, notification)
+        if (isServiceRunning || isCapturing) {
+            notificationManager.notify(NOTIFICATION_SERVICE_ID, buildOngoingNotification(statusText))
         }
     }
 
     private fun sendDiseaseAlertNotification(record: DetectionRecord) {
+        // Bam thong bao mo man Ket qua, bam quay lai thi ve Trang chu (khong thoat app)
         val openDetailIntent = Intent(this, DetailActivity::class.java).apply {
             putExtra(DetailActivity.EXTRA_RECORD_ID, record.id)
         }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            record.id.hashCode(),
-            openDetailIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = TaskStackBuilder.create(this)
+            .addNextIntentWithParentStack(openDetailIntent)
+            .getPendingIntent(record.id.hashCode(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val alertNotification = NotificationCompat.Builder(this, CHANNEL_ALERT_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_eco)
             .setContentTitle(record.overallTitle)
             .setContentText(record.overallSummary)
             .setStyle(
@@ -430,36 +432,30 @@ class GardenMonitorService : Service() {
     }
 
     private fun createNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Kênh 1: Cho Foreground Service (chạy ngầm, không kêu)
-            val serviceChannel = NotificationChannel(
-                CHANNEL_SERVICE_ID,
-                "Giám sát Vườn cây (Chạy ngầm)",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Hiển thị trạng thái hoạt động tự động chụp ảnh từ vườn"
-            }
-            notificationManager.createNotificationChannel(serviceChannel)
-
-            // Kênh 2: Cho Cảnh báo Bệnh hại (có chuông và rung)
-            val alertChannel = NotificationChannel(
-                CHANNEL_ALERT_ID,
-                "Cảnh báo Bệnh hại Cây trồng",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Thông báo khẩn cấp khi phát hiện dấu hiệu bệnh lá hoặc thối quả"
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(alertChannel)
+        // Kênh 1: Cho Foreground Service (chạy ngầm, không kêu)
+        val serviceChannel = NotificationChannel(
+            CHANNEL_SERVICE_ID,
+            "Giám sát Vườn cây (Chạy ngầm)",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Hiển thị trạng thái hoạt động tự động chụp ảnh từ vườn"
         }
+        notificationManager.createNotificationChannel(serviceChannel)
+
+        // Kênh 2: Cho Cảnh báo Bệnh hại (có chuông và rung)
+        val alertChannel = NotificationChannel(
+            CHANNEL_ALERT_ID,
+            "Cảnh báo Bệnh hại Cây trồng",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Thông báo khẩn cấp khi phát hiện dấu hiệu bệnh lá hoặc thối quả"
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(alertChannel)
     }
 
     private fun broadcastStatus() {
-        val intent = Intent(BROADCAST_SERVICE_STATUS).apply {
-            putExtra("isRunning", isServiceRunning)
-            putExtra("nextRun", nextRunTimeMillis)
-        }
-        sendBroadcast(intent)
+        sendBroadcast(Intent(BROADCAST_SERVICE_STATUS).setPackage(packageName))
     }
 
     private fun formatClockTime(millis: Long): String {
@@ -467,12 +463,11 @@ class GardenMonitorService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         isServiceRunning = false
-        cancelAlarm()
+        cancelScheduledRuns()
         broadcastStatus()
         serviceScope.cancel()
-        leafModel?.close()
-        fruitModel?.close()
+        // Model AI dung chung (AiEngine) nen khong dong o day: man Camera co the dang dung
+        super.onDestroy()
     }
 }
