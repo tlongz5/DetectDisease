@@ -19,6 +19,7 @@ object ConfigManager {
     private const val KEY_TIME_UNIT = "time_unit"
     private const val KEY_CAPTURE_MODE = "capture_mode"
     private const val KEY_MONITORING = "monitoring_enabled"
+    private const val KEY_CAPTURE_SOUND = "capture_sound"
 
     // Chu kỳ tự động chụp. "Chụp ngay" giờ là nút riêng trên Trang chủ, không còn là 1 chế độ
     const val MODE_30_SECONDS = "MODE_30_SECONDS" // Mỗi 30 giây (theo dõi sát)
@@ -83,6 +84,14 @@ object ConfigManager {
 
     fun setMonitoringEnabled(context: Context, enabled: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_MONITORING, enabled).apply()
+    }
+
+    /** Keu "bip" moi lan ESP32-CAM chup xong (mac dinh bat) */
+    fun isCaptureSoundEnabled(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_CAPTURE_SOUND, true)
+
+    fun setCaptureSoundEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_CAPTURE_SOUND, enabled).apply()
     }
 
     fun getStartDelay(context: Context): Float {

@@ -28,6 +28,10 @@ class SettingsActivity : AppCompatActivity() {
         loadSavedConfig()
 
         binding.rgModes.setOnCheckedChangeListener { _, checkedId -> updateModeUi(modeFor(checkedId)) }
+        // Bat len thi keu thu 1 tieng de nghe am luong
+        binding.switchCaptureSound.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) CaptureSound.play()
+        }
         binding.btnTestConnection.setOnClickListener { testConnection() }
         binding.btnSave.setOnClickListener { saveAndFinish() }
     }
@@ -35,6 +39,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadSavedConfig() {
         binding.edtIpAddress.setText(ConfigManager.getIp(this))
         binding.edtInterval.setText(formatNumber(ConfigManager.getInterval(this)))
+        binding.switchCaptureSound.isChecked = ConfigManager.isCaptureSoundEnabled(this)
 
         val mode = ConfigManager.getMode(this)
         binding.rgModes.check(
@@ -154,6 +159,7 @@ class SettingsActivity : AppCompatActivity() {
             mode = mode,
             startDelay = 0f
         )
+        ConfigManager.setCaptureSoundEnabled(this, binding.switchCaptureSound.isChecked)
         // Dang tu dong chup thi hen lai lich theo cau hinh moi
         if (GardenMonitorService.isServiceRunning) GardenMonitorService.startMonitoring(this)
 

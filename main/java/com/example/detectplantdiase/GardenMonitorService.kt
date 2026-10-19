@@ -310,6 +310,7 @@ class GardenMonitorService : Service() {
             try {
                 updateOngoingNotification("Đang tải ảnh từ vườn (${ConfigManager.getCaptureUrl(this@GardenMonitorService)})...")
                 val bmp = withContext(Dispatchers.IO) { EspClient.fetchImage(this@GardenMonitorService) }
+                CaptureSound.playIfEnabled(this@GardenMonitorService)  // ESP vua chup xong: keu 1 tieng
 
                 updateOngoingNotification("Đang phân tích AI (Lá & Quả)...")
                 val (record, sent) = AiEngine.analyzeAndSave(
